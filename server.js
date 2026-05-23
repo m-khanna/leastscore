@@ -486,10 +486,10 @@ function resolveDeclare(game, declarer) {
   const minTotal = Math.min(...totals.map(t => t.total));
   const strictlyLowest = declarerTotal === minTotal && totals.filter(t => t.total === minTotal).length === 1;
 
-  // Scoring: each non-declarer gets the difference between their hand total
-  // and the declarer's hand total. On a correct declare this is always ≥ 0;
-  // on a wrong declare the player(s) who actually beat the declarer get a
-  // negative (i.e. a credit against their cumulative score).
+  // Scoring: each non-declarer gets max(0, theirHandTotal - declarerHandTotal).
+  // On a correct declare this is always > 0. On a wrong declare any player
+  // who actually beat the declarer scores 0 (the declarer alone takes the
+  // +30 penalty — no double whammy on the players who held lower hands).
   const perPlayer = {};
   for (const t of totals) perPlayer[t.p.playerId] = 0;
   for (const p of game.players) if (p.eliminated) perPlayer[p.playerId] = 0;
@@ -497,7 +497,7 @@ function resolveDeclare(game, declarer) {
   if (strictlyLowest) {
     for (const t of totals) {
       if (t.p.playerId !== declarer.playerId) {
-        const delta = t.total - declarerTotal;
+        const delta = Math.max(0, t.total - declarerTotal);
         t.p.cumulativeScore += delta;
         perPlayer[t.p.playerId] = delta;
       }
@@ -507,7 +507,7 @@ function resolveDeclare(game, declarer) {
     perPlayer[declarer.playerId] = 30;
     for (const t of totals) {
       if (t.p.playerId !== declarer.playerId) {
-        const delta = t.total - declarerTotal;
+        const delta = Math.max(0, t.total - declarerTotal);
         t.p.cumulativeScore += delta;
         perPlayer[t.p.playerId] = delta;
       }

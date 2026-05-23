@@ -618,7 +618,7 @@
     <button class="modal-close" id="closeRules">×</button>
     <h2 style="margin-top: 0;">Rules</h2>
     <div class="rules-content">
-      <p><b>Goal:</b> have the strictly lowest hand total when you declare. Score 0 if right, +40 if wrong. Players are eliminated at the score limit. Last one standing wins.</p>
+      <p><b>Goal:</b> have the strictly lowest hand total when you declare. Score 0 if right, +30 if wrong. Players are eliminated at the score limit. Last one standing wins.</p>
 
       <div class="rules-cols">
         <div>
@@ -650,7 +650,7 @@
           <h3>Declaring</h3>
           <ul>
             <li>Strictly lowest → you score <code>0</code>; each other player gets <b>(their hand − your hand)</b>.</li>
-            <li>Not lowest → you take <b>+30</b>; each other player still gets <b>(their hand − your hand)</b>, which can be negative.</li>
+            <li>Not lowest → you take <b>+30</b>; each other player gets <b>max(0, their hand − your hand)</b>.</li>
           </ul>
 
           <h3>Other</h3>
@@ -1193,7 +1193,7 @@
     verdict.className = 'declare-result ' + (res.correct ? 'ok' : 'bad');
     verdict.textContent = res.correct
       ? `${declarer.name} declared with ${res.declarerTotal} and was correct — scores 0 this round.`
-      : `${declarer.name} declared with ${res.declarerTotal} but didn't have the lowest — +40 penalty.`;
+      : `${declarer.name} declared with ${res.declarerTotal} but didn't have the lowest — +30 penalty.`;
     panel.appendChild(verdict);
 
     res.hands.forEach(h => {
