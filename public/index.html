@@ -284,6 +284,10 @@
   }
   .deck-card.disabled { cursor: not-allowed; opacity: .6; }
   .deck-card:not(.disabled):hover { transform: translateY(-2px); }
+  .deck-card.selected {
+    box-shadow: 0 0 0 3px var(--blue), 0 6px 14px rgba(45,108,223,.6);
+    transform: translateY(-6px);
+  }
   .deck-empty {
     width: 70px; height: 98px;
     border-radius: 7px;
@@ -298,6 +302,10 @@
   }
   .discard-card-wrap.pickable { cursor: pointer; }
   .discard-card-wrap.pickable:hover .card { transform: translateY(-6px); box-shadow: 0 6px 14px rgba(45, 108, 223, .5); }
+  .discard-card-wrap.selected .card {
+    transform: translateY(-12px);
+    box-shadow: 0 0 0 3px var(--blue), 0 6px 14px rgba(45,108,223,.6);
+  }
 
   /* ---------- Card ---------- */
   .card {
@@ -374,14 +382,15 @@
   .pick-prompt {
     position: absolute;
     left: 50%;
-    bottom: 240px;
+    bottom: 232px;
     transform: translateX(-50%);
-    background: rgba(0,0,0,.85);
-    border: 1px solid var(--gold);
-    border-radius: 8px;
-    padding: 14px 22px;
-    font-size: 14px;
-    box-shadow: 0 8px 20px rgba(0,0,0,.6);
+    background: rgba(0,0,0,.7);
+    border: 1px solid rgba(212,160,23,.6);
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-size: 12px;
+    color: #f5e1a0;
+    white-space: nowrap;
   }
 
   /* ---------- Round end / game end overlays ---------- */
@@ -396,9 +405,11 @@
     background: #1c2c1c;
     border: 1px solid rgba(255,255,255,.1);
     border-radius: 12px;
-    padding: 28px 36px;
+    padding: 24px 32px;
     min-width: 560px;
     max-width: 800px;
+    max-height: 90vh;
+    overflow-y: auto;
     box-shadow: 0 20px 50px rgba(0,0,0,.6);
   }
   .overlay h2 { margin: 0 0 8px; color: var(--gold-bright); }
@@ -460,10 +471,12 @@
   .scoreboard-table tr.eliminated td { color: #888; text-decoration: line-through; }
   .scoreboard-table tr.eliminated td.total-col { color: #c66; }
 
-  .rules-content { font-size: 14px; line-height: 1.6; color: #ddd; }
-  .rules-content h3 { color: var(--gold-bright); margin: 14px 0 6px; font-size: 14px; letter-spacing: 1px; }
-  .rules-content ul { margin: 4px 0 8px 18px; padding: 0; }
-  .rules-content li { margin-bottom: 4px; }
+  .rules-content { font-size: 13px; line-height: 1.45; color: #ddd; }
+  .rules-content p { margin: 4px 0 6px; }
+  .rules-content h3 { color: var(--gold-bright); margin: 10px 0 4px; font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase; }
+  .rules-content ul, .rules-content ol { margin: 2px 0 6px 18px; padding: 0; }
+  .rules-content li { margin-bottom: 2px; }
+  .rules-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 28px; }
   .rules-content code {
     background: rgba(0,0,0,.4);
     border-radius: 3px;
@@ -589,7 +602,7 @@
         <span class="handsum">Hand: <span id="meHandTotal">0</span></span>
       </div>
       <div class="actions">
-        <button id="btnDiscard">Discard Selected</button>
+        <button class="primary" id="btnMove">Move</button>
         <button class="declare" id="btnDeclare">DECLARE</button>
       </div>
     </div>
@@ -606,48 +619,52 @@
 <div id="rulesModal" class="overlay hidden">
   <div class="panel" style="position: relative; max-width: 640px;">
     <button class="modal-close" id="closeRules">×</button>
-    <h2>Rules</h2>
+    <h2 style="margin-top: 0;">Rules</h2>
     <div class="rules-content">
-      <p>The goal: have the strictly lowest hand total when you declare. Score 0 if you're right, +40 penalty if you're wrong. Players are eliminated when they hit the score limit. Last player standing wins.</p>
+      <p><b>Goal:</b> have the strictly lowest hand total when you declare. Score 0 if right, +40 if wrong. Players are eliminated at the score limit. Last one standing wins.</p>
 
-      <h3>Card values</h3>
-      <ul>
-        <li>Ace = <code>1</code></li>
-        <li>2 – 10 = face value</li>
-        <li>J / Q / K = <code>10</code></li>
-      </ul>
+      <div class="rules-cols">
+        <div>
+          <h3>Card values</h3>
+          <ul>
+            <li>Ace = <code>1</code></li>
+            <li>2 – 10 = face value</li>
+            <li>J / Q / K = <code>10</code></li>
+          </ul>
 
-      <h3>On your turn</h3>
-      <ol>
-        <li><b>Discard</b> a valid combination from your hand, OR</li>
-        <li><b>Declare</b> if you believe you have the strictly lowest hand total (not allowed in round 1).</li>
-      </ol>
-      <p>After discarding, draw one card from the deck (hidden) <em>or</em> take any one card from the previous player's discard.</p>
+          <h3>Valid discards</h3>
+          <ul>
+            <li><b>Single</b> card</li>
+            <li><b>Pair</b> (2 of same rank)</li>
+            <li><b>Four of a kind</b></li>
+            <li><b>Sequence of 3</b> consecutive ranks (any suits). Ace low (A-2-3) or high (Q-K-A); no wrap.</li>
+            <li><b>Sequence of 5</b> consecutive ranks (any suits)</li>
+            <li><b>Flush of 5</b> (same suit)</li>
+          </ul>
+          <p><b>3 of a kind is NOT valid.</b></p>
+        </div>
+        <div>
+          <h3>On your turn</h3>
+          <ol>
+            <li>Select cards to discard <em>and</em> one card to pick (from the deck or any face-up discard card), then click <b>Move</b>.</li>
+            <li>Or click <b>Declare</b> if you think you have the strictly lowest total.</li>
+          </ol>
 
-      <h3>Valid discards</h3>
-      <ul>
-        <li><b>Single card</b> — any one card</li>
-        <li><b>Pair</b> — 2 cards of the same rank</li>
-        <li><b>Four of a kind</b> — 4 cards of the same rank</li>
-        <li><b>Sequence of 3</b> — 3 consecutive ranks (any suits). Ace may be low (A-2-3) or high (Q-K-A) but no wrap.</li>
-        <li><b>Sequence of 5</b> — 5 consecutive ranks (any suits). Same ace rule.</li>
-        <li><b>Flush of 5</b> — any 5 cards of the same suit</li>
-      </ul>
-      <p><b>Three of a kind is NOT valid.</b></p>
+          <h3>Declaring</h3>
+          <ul>
+            <li>Strictly lowest → you score <code>0</code>; others add their hand total.</li>
+            <li>Not lowest → you take <b>+40</b>; others still add their hand total.</li>
+          </ul>
 
-      <h3>Declaring</h3>
-      <ul>
-        <li>If your hand total is <b>strictly lower</b> than everyone else's: you score <code>0</code>, everyone else adds their hand total to their cumulative score.</li>
-        <li>If you don't have the strictly lowest: you take a <b>+40 penalty</b>, and everyone else still adds their hand total.</li>
-      </ul>
-
-      <h3>Other</h3>
-      <ul>
-        <li>5–6 player games use two shuffled decks.</li>
-        <li>If the deck runs out, all discards except the current top are reshuffled into a new deck.</li>
-        <li>You cannot declare in the first round.</li>
-        <li>If turn timer is enabled, you have 60s per turn — if you don't act, a random card is auto-discarded and a card is auto-drawn from the deck.</li>
-      </ul>
+          <h3>Other</h3>
+          <ul>
+            <li>5–6 player games use two decks.</li>
+            <li>Deck runs out → reshuffle discards (except current top).</li>
+            <li>Declare unlocks once everyone has played their first turn.</li>
+            <li>Turn timer (if enabled): 60s; otherwise a random card is auto-played.</li>
+          </ul>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -674,6 +691,9 @@
   let myGameId = null;
   let state = null;
   let selectedIdx = new Set();
+  // pickSel: null | {source:'deck'} | {source:'discard', idx:N}
+  let pickSel = null;
+  let lastTurnPlayer = null;
 
   // ---------- DOM helpers ----------
   const $ = (id) => document.getElementById(id);
@@ -775,9 +795,12 @@
   });
 
   // ---------- Game UI ----------
-  $('btnDiscard').addEventListener('click', () => {
-    if (selectedIdx.size === 0) { showToast('Select cards to discard.'); return; }
-    socket.emit('discard', { cardIndices: [...selectedIdx] });
+  $('btnMove').addEventListener('click', () => {
+    if (selectedIdx.size === 0) { showToast('Select cards from your hand to discard.'); return; }
+    if (!pickSel) { showToast('Pick a card from the deck or discard pile.'); return; }
+    const payload = { cardIndices: [...selectedIdx], pickSource: pickSel.source };
+    if (pickSel.source === 'discard') payload.pickCardIdx = pickSel.idx;
+    socket.emit('move', payload);
   });
 
   $('btnDeclare').addEventListener('click', () => {
@@ -869,14 +892,18 @@
 
     const isMyTurn = !!(state.you && state.you.isYourTurn);
     const turnPlayer = state.players.find(p => p.playerId === state.currentPlayerId);
+    // Clear selections when the turn moves to a different player.
+    if (state.currentPlayerId !== lastTurnPlayer) {
+      selectedIdx.clear();
+      pickSel = null;
+      lastTurnPlayer = state.currentPlayerId;
+    }
     const banner = $('turnBanner');
     if (state.state === 'roundEnd' || state.state === 'gameEnd') {
       banner.textContent = state.state === 'gameEnd' ? 'Game Over' : 'Round Over';
       banner.classList.remove('your-turn');
     } else if (isMyTurn) {
-      banner.textContent = state.state === 'awaitingPick'
-        ? 'Your pick: take from deck or discard'
-        : 'Your turn — discard or declare';
+      banner.textContent = 'Your turn — make a move or declare';
       banner.classList.add('your-turn');
     } else {
       banner.textContent = turnPlayer ? `${turnPlayer.name}'s turn…` : 'Waiting…';
@@ -954,14 +981,23 @@
   }
 
   function renderCenter() {
+    const myTurn = state.you?.isYourTurn && state.state === 'awaitingMove';
+
     // Deck
     const deckSlot = $('deckSlot');
     deckSlot.innerHTML = '';
-    const canPickDeck = state.you?.isYourTurn && state.state === 'awaitingPick';
+    const canPickDeck = myTurn && state.deckCount > 0;
     if (state.deckCount > 0) {
       const dc = document.createElement('div');
       dc.className = 'deck-card' + (canPickDeck ? '' : ' disabled');
-      if (canPickDeck) dc.addEventListener('click', () => socket.emit('pick', { source: 'deck' }));
+      if (pickSel && pickSel.source === 'deck') dc.classList.add('selected');
+      if (canPickDeck) {
+        dc.addEventListener('click', () => {
+          if (pickSel && pickSel.source === 'deck') pickSel = null;
+          else pickSel = { source: 'deck' };
+          render();
+        });
+      }
       deckSlot.appendChild(dc);
     } else {
       const empty = document.createElement('div');
@@ -974,14 +1010,19 @@
     const discardArea = $('discardArea');
     discardArea.innerHTML = '';
     const top = state.discardTop || [];
-    const canPickDiscard = state.you?.isYourTurn && state.state === 'awaitingPick' && top.length > 0;
+    const canPickDiscard = myTurn && top.length > 0;
     top.forEach((card, idx) => {
       const wrap = document.createElement('div');
       wrap.className = 'discard-card-wrap' + (canPickDiscard ? ' pickable' : '');
+      if (pickSel && pickSel.source === 'discard' && pickSel.idx === idx) wrap.classList.add('selected');
       const c = renderCard(card);
       wrap.appendChild(c);
       if (canPickDiscard) {
-        wrap.addEventListener('click', () => socket.emit('pick', { source: 'discard', cardIdx: idx }));
+        wrap.addEventListener('click', () => {
+          if (pickSel && pickSel.source === 'discard' && pickSel.idx === idx) pickSel = null;
+          else pickSel = { source: 'discard', idx };
+          render();
+        });
       }
       discardArea.appendChild(wrap);
     });
@@ -992,13 +1033,13 @@
     }
     $('discardLabel').textContent = top.length ? `${top.length} card${top.length>1?'s':''}` : 'empty';
 
-    // Pick prompt
+    // Inline hint
     const prompt = $('pickPrompt');
-    if (state.state === 'awaitingPick' && state.you?.isYourTurn) {
+    if (myTurn) {
       prompt.classList.remove('hidden');
-      prompt.textContent = top.length
-        ? 'Click the deck OR any one card from the discard to pick it up.'
-        : 'Click the deck to draw a card.';
+      const handPart = selectedIdx.size === 0 ? 'select cards to discard' : `${selectedIdx.size} card${selectedIdx.size>1?'s':''} to discard`;
+      const pickPart = !pickSel ? 'and click the deck or a discard card to pick' : (pickSel.source === 'deck' ? 'picking from deck' : 'picking from discard');
+      prompt.textContent = `${handPart} · ${pickPart}`;
     } else {
       prompt.classList.add('hidden');
     }
@@ -1016,7 +1057,7 @@
       const c = renderCard(card, {
         selected: selectedIdx.has(idx),
         onClick: () => {
-          if (!me.isYourTurn || state.state !== 'awaitingDiscard') return;
+          if (!me.isYourTurn || state.state !== 'awaitingMove') return;
           if (selectedIdx.has(idx)) selectedIdx.delete(idx);
           else selectedIdx.add(idx);
           render();
@@ -1027,14 +1068,16 @@
 
     $('meHandTotal').textContent = me.handTotal;
 
-    const canDiscard = me.isYourTurn && state.state === 'awaitingDiscard';
-    $('btnDiscard').disabled = !canDiscard || selectedIdx.size === 0;
-    const canDeclareNow = canDiscard && state.canDeclare;
+    const canMove = me.isYourTurn && state.state === 'awaitingMove';
+    $('btnMove').disabled = !canMove || selectedIdx.size === 0 || !pickSel;
+    const canDeclareNow = canMove && state.canDeclare;
     $('btnDeclare').disabled = !canDeclareNow;
-    $('btnDeclare').title = (canDiscard && !state.canDeclare) ? 'Cannot declare in round 1' : '';
-    if (state.state !== 'awaitingDiscard' || !me.isYourTurn) {
-      // clear selection if it's no longer my turn (or moved to pick step)
+    $('btnDeclare').title = (canMove && !state.canDeclare)
+      ? 'Declare unlocks after everyone has played their first turn'
+      : '';
+    if (state.state !== 'awaitingMove' || !me.isYourTurn) {
       selectedIdx.clear();
+      pickSel = null;
     }
   }
 

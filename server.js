@@ -21,13 +21,13 @@ server.listen(PORT, () => console.log(`Least Score listening on :${PORT}`));
 // ---------- Game state shape ----------
 // games[gameId] = {
 //   id, hostPlayerId, createdAt,
-//   state: 'lobby' | 'awaitingDiscard' | 'awaitingPick' | 'roundEnd' | 'gameEnd',
+//   state: 'lobby' | 'awaitingMove' | 'roundEnd' | 'gameEnd',
 //   numDecks,
 //   settings: { eliminateAt, turnTimerEnabled },
 //   players: [{ playerId, socketId, name, hand, cumulativeScore, eliminated, connected, disconnectedAt }],
 //   deck, discardPile (array of groups, last = top),
-//   pendingDiscard,
 //   currentTurnIdx, round, roundStarterIdx,
+//   turnsTakenThisRound,        // for unlocking declare after the first pass of turns
 //   turnDeadline, turnTimerId,
 //   roundHistory: [ { round, declarerId, correct, perPlayer: { playerId: pointsAdded } } ],
 //   lastRoundResult,
@@ -133,7 +133,6 @@ function startRound(game, starterIdx) {
   const activePlayers = game.players.filter(p => !p.eliminated);
   game.numDecks = activePlayers.length >= 5 ? 2 : 1;
   game.deck = buildDeck(game.numDecks);
-  game.pendingDiscard = null;
   for (const p of game.players) {
     p.hand = p.eliminated ? [] : game.deck.splice(0, 5);
   }
@@ -147,7 +146,8 @@ function startRound(game, starterIdx) {
     game.currentTurnIdx = (game.currentTurnIdx + 1) % game.players.length;
   }
   game.roundStarterIdx = game.currentTurnIdx;
-  game.state = 'awaitingDiscard';
+  game.turnsTakenThisRound = 0;
+  game.state = 'awaitingMove';
   game.lastRoundResult = null;
   startTurnTimer(game);
 }
@@ -179,37 +179,33 @@ function clearTurnTimer(game) {
 function startTurnTimer(game) {
   clearTurnTimer(game);
   if (!game.settings.turnTimerEnabled) return;
-  if (game.state !== 'awaitingDiscard' && game.state !== 'awaitingPick') return;
+  if (game.state !== 'awaitingMove') return;
   game.turnDeadline = Date.now() + TURN_DURATION_MS;
   game.turnTimerId = setTimeout(() => autoPlayCurrentTurn(game), TURN_DURATION_MS);
 }
 
-// Auto-action when the turn timer fires:
-//   awaitingDiscard -> discard one random card, then pick from deck (hidden)
-//   awaitingPick    -> pick from deck (hidden)
+// Auto-action when the turn timer fires: discard one random card and draw
+// from the deck (hidden), then advance.
 function autoPlayCurrentTurn(game) {
   const player = game.players[game.currentTurnIdx];
-  if (!player || player.eliminated) return;
+  if (!player || player.eliminated || game.state !== 'awaitingMove') return;
 
-  if (game.state === 'awaitingDiscard') {
-    if (player.hand.length === 0) return;
-    const i = crypto.randomInt(0, player.hand.length);
-    const card = player.hand.splice(i, 1)[0];
-    game.pendingDiscard = [card];
-    game.state = 'awaitingPick';
-  }
-
-  if (game.state === 'awaitingPick') {
-    refillDeckIfNeeded(game);
-    if (game.deck.length > 0) {
-      player.hand.push(game.deck.shift());
-    }
-    game.discardPile.push(game.pendingDiscard || []);
-    game.pendingDiscard = null;
+  if (player.hand.length === 0) {
     advanceTurn(game);
-    game.state = 'awaitingDiscard';
+    startTurnTimer(game);
+    broadcastState(game);
+    return;
   }
 
+  const i = crypto.randomInt(0, player.hand.length);
+  const card = player.hand.splice(i, 1)[0];
+
+  refillDeckIfNeeded(game);
+  if (game.deck.length > 0) player.hand.push(game.deck.shift());
+
+  game.discardPile.push([card]);
+  game.turnsTakenThisRound += 1;
+  advanceTurn(game);
   startTurnTimer(game);
   broadcastState(game);
 }
@@ -218,6 +214,10 @@ function autoPlayCurrentTurn(game) {
 function viewFor(game, playerId) {
   const me = game.players.find(p => p.playerId === playerId);
   const myHand = me ? me.hand : [];
+  const activeCount = game.players.filter(p => !p.eliminated).length;
+  // Declare is blocked only during the opening phase of round 1, until every
+  // active player has completed their first turn. After that it's available.
+  const canDeclare = game.round > 1 || (game.turnsTakenThisRound || 0) >= activeCount;
   return {
     id: game.id,
     state: game.state,
@@ -229,7 +229,9 @@ function viewFor(game, playerId) {
     deckCount: game.deck.length,
     discardTop: game.discardPile.length ? game.discardPile[game.discardPile.length - 1] : [],
     turnDeadline: game.turnDeadline,
-    canDeclare: game.round > 1,
+    canDeclare,
+    turnsTakenThisRound: game.turnsTakenThisRound || 0,
+    activeCount,
     players: game.players.map(p => ({
       playerId: p.playerId,
       name: p.name,
@@ -285,8 +287,9 @@ io.on('connection', (socket) => {
         hand: [], cumulativeScore: 0, eliminated: false,
         connected: true, disconnectedAt: null,
       }],
-      deck: [], discardPile: [], pendingDiscard: null,
+      deck: [], discardPile: [],
       currentTurnIdx: 0, round: 0, roundStarterIdx: 0,
+      turnsTakenThisRound: 0,
       turnDeadline: null, turnTimerId: null,
       roundHistory: [], lastRoundResult: null,
     };
@@ -366,11 +369,15 @@ io.on('connection', (socket) => {
     broadcastState(game);
   });
 
-  socket.on('discard', ({ cardIndices }) => {
+  // Single-step "move": discard a valid combo AND pick one card, all in
+  // one action. pickSource is 'deck' or 'discard'; pickCardIdx is required
+  // when pickSource is 'discard'.
+  socket.on('move', ({ cardIndices, pickSource, pickCardIdx }) => {
     const game = games[socket.data.gameId];
-    if (!game || game.state !== 'awaitingDiscard') return;
+    if (!game || game.state !== 'awaitingMove') return;
     const player = game.players[game.currentTurnIdx];
     if (player.playerId !== socket.data.playerId) return;
+
     if (!Array.isArray(cardIndices) || cardIndices.length === 0) {
       return sendError(socket, 'Select at least one card to discard.');
     }
@@ -382,47 +389,48 @@ io.on('connection', (socket) => {
     if (!validateDiscard(selected)) {
       return sendError(socket, 'Invalid discard combination.');
     }
-    for (const i of unique) player.hand.splice(i, 1);
-    game.pendingDiscard = selected;
-    game.state = 'awaitingPick';
-    startTurnTimer(game);
-    broadcastState(game);
-  });
 
-  socket.on('pick', ({ source, cardIdx }) => {
-    const game = games[socket.data.gameId];
-    if (!game || game.state !== 'awaitingPick') return;
-    const player = game.players[game.currentTurnIdx];
-    if (player.playerId !== socket.data.playerId) return;
-
-    if (source === 'deck') {
-      refillDeckIfNeeded(game);
-      if (game.deck.length > 0) player.hand.push(game.deck.shift());
-    } else if (source === 'discard') {
+    // Pre-validate pick (no mutation yet)
+    let pickIdx = -1;
+    if (pickSource === 'discard') {
       const top = game.discardPile[game.discardPile.length - 1];
-      if (!top) return sendError(socket, 'No discard to pick from.');
-      const idx = Number(cardIdx);
-      if (!Number.isInteger(idx) || idx < 0 || idx >= top.length) {
+      if (!top || top.length === 0) return sendError(socket, 'No card available in discard.');
+      pickIdx = Number(pickCardIdx);
+      if (!Number.isInteger(pickIdx) || pickIdx < 0 || pickIdx >= top.length) {
         return sendError(socket, 'Invalid discard pick.');
       }
-      player.hand.push(top.splice(idx, 1)[0]);
-      if (top.length === 0) game.discardPile.pop();
-    } else {
+    } else if (pickSource !== 'deck') {
       return sendError(socket, 'Pick source must be deck or discard.');
     }
 
-    game.discardPile.push(game.pendingDiscard);
-    game.pendingDiscard = null;
+    // Mutate: remove discard cards from hand
+    for (const i of unique) player.hand.splice(i, 1);
+
+    // Perform pick
+    if (pickSource === 'deck') {
+      refillDeckIfNeeded(game);
+      if (game.deck.length > 0) player.hand.push(game.deck.shift());
+    } else {
+      const top = game.discardPile[game.discardPile.length - 1];
+      player.hand.push(top.splice(pickIdx, 1)[0]);
+      if (top.length === 0) game.discardPile.pop();
+    }
+
+    // Commit the discarded group as the new top
+    game.discardPile.push(selected);
+    game.turnsTakenThisRound += 1;
     advanceTurn(game);
-    game.state = 'awaitingDiscard';
     startTurnTimer(game);
     broadcastState(game);
   });
 
   socket.on('declare', () => {
     const game = games[socket.data.gameId];
-    if (!game || game.state !== 'awaitingDiscard') return;
-    if (game.round <= 1) return sendError(socket, 'Cannot declare in the first round.');
+    if (!game || game.state !== 'awaitingMove') return;
+    const activeCount = game.players.filter(p => !p.eliminated).length;
+    if (game.round <= 1 && (game.turnsTakenThisRound || 0) < activeCount) {
+      return sendError(socket, 'Declare unlocks after everyone has played their first turn.');
+    }
     const player = game.players[game.currentTurnIdx];
     if (player.playerId !== socket.data.playerId) return;
     clearTurnTimer(game);
