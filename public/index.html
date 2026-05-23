@@ -1,0 +1,1210 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=1100" />
+<title>Least Score</title>
+<style>
+  :root {
+    --felt: #0d6b3b;
+    --felt-dark: #074024;
+    --gold: #d4a017;
+    --gold-bright: #f2c94c;
+    --card-bg: #fdfdfb;
+    --red: #c0392b;
+    --black: #1a1a1a;
+    --blue: #2d6cdf;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: radial-gradient(ellipse at center, var(--felt) 0%, var(--felt-dark) 100%);
+    color: #eee;
+    overflow: hidden;
+  }
+  button {
+    font-family: inherit;
+    cursor: pointer;
+    border: none;
+    border-radius: 6px;
+    padding: 10px 18px;
+    font-size: 14px;
+    font-weight: 600;
+    background: #2a2a2a;
+    color: #fff;
+    transition: transform .08s, background .15s;
+  }
+  button:hover:not(:disabled) { background: #3a3a3a; }
+  button:active:not(:disabled) { transform: translateY(1px); }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  button.primary { background: var(--blue); }
+  button.primary:hover:not(:disabled) { background: #4a82e9; }
+  button.declare {
+    background: linear-gradient(180deg, var(--gold-bright) 0%, var(--gold) 100%);
+    color: #2a1a00;
+    font-weight: 800;
+    letter-spacing: .5px;
+    box-shadow: 0 2px 6px rgba(0,0,0,.4);
+  }
+  button.declare:hover:not(:disabled) { filter: brightness(1.1); }
+  input {
+    font-family: inherit;
+    font-size: 15px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    border: 1px solid #555;
+    background: #1a1a1a;
+    color: #fff;
+    outline: none;
+  }
+  input:focus { border-color: var(--gold); }
+
+  /* ---------- Lobby screen ---------- */
+  .screen-lobby {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .lobby-card {
+    background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 12px;
+    padding: 40px 44px;
+    min-width: 420px;
+    box-shadow: 0 14px 40px rgba(0,0,0,.5);
+  }
+  .lobby-card h1 {
+    margin: 0 0 4px 0;
+    font-size: 32px;
+    letter-spacing: 1px;
+    color: var(--gold-bright);
+  }
+  .lobby-card .tag { color: #aaa; margin-bottom: 26px; font-size: 13px; }
+  .lobby-card label { display: block; font-size: 12px; color: #bbb; margin-bottom: 6px; text-transform: uppercase; letter-spacing: .5px; }
+  .lobby-card input { width: 100%; margin-bottom: 16px; }
+  .lobby-row { display: flex; gap: 10px; }
+  .lobby-row button { flex: 1; padding: 12px; }
+  .lobby-err { color: #ff8a8a; margin-top: 12px; min-height: 18px; font-size: 13px; }
+  .lobby-divider { text-align: center; color: #666; margin: 14px 0; font-size: 11px; letter-spacing: 2px; }
+
+  /* ---------- In-lobby (post-join, pre-start) ---------- */
+  .room-header {
+    text-align: center;
+    margin-bottom: 24px;
+  }
+  .room-header .label { font-size: 11px; letter-spacing: 2px; color: #999; }
+  .room-id {
+    font-size: 38px;
+    font-weight: 800;
+    letter-spacing: 8px;
+    color: var(--gold-bright);
+    margin: 4px 0 8px;
+    font-family: 'SF Mono', Menlo, monospace;
+  }
+  .room-id .copy {
+    display: inline-block;
+    margin-left: 6px;
+    font-size: 12px;
+    letter-spacing: 0;
+    cursor: pointer;
+    color: #aaa;
+    vertical-align: middle;
+  }
+  .room-id .copy:hover { color: var(--gold-bright); }
+  .player-list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 18px 0;
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .player-list li {
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(255,255,255,.06);
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .player-list li:last-child { border-bottom: none; }
+  .host-tag { font-size: 10px; color: var(--gold-bright); border: 1px solid var(--gold); border-radius: 3px; padding: 1px 5px; }
+
+  .settings-block {
+    margin: 16px 0;
+    padding: 14px;
+    background: rgba(255,255,255,.03);
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 6px;
+  }
+  .settings-block h3 {
+    margin: 0 0 10px;
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: #bbb;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .settings-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+    font-size: 13px;
+  }
+  .settings-row:last-child { margin-bottom: 0; }
+  .settings-row > label { width: 110px; color: #ddd; }
+  .pill-group { display: flex; gap: 6px; flex: 1; }
+  .pill {
+    padding: 6px 10px;
+    border-radius: 4px;
+    border: 1px solid #555;
+    background: #2a2a2a;
+    color: #ddd;
+    cursor: pointer;
+    font-size: 13px;
+    font-family: inherit;
+  }
+  .pill:hover:not(:disabled) { background: #3a3a3a; }
+  .pill.active {
+    background: var(--gold);
+    color: #2a1a00;
+    border-color: var(--gold-bright);
+    font-weight: 600;
+  }
+  .pill:disabled { cursor: default; opacity: .8; }
+
+  /* ---------- Game board ---------- */
+  .screen-game {
+    position: absolute; inset: 0;
+    display: grid;
+    grid-template-rows: 50px 1fr 220px;
+  }
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    background: rgba(0,0,0,.25);
+    border-bottom: 1px solid rgba(0,0,0,.25);
+    font-size: 13px;
+  }
+  .topbar .left, .topbar .right { display: flex; gap: 16px; align-items: center; }
+  .topbar .room { font-family: monospace; color: var(--gold-bright); letter-spacing: 3px; }
+  .topbar .turn-banner {
+    background: rgba(0,0,0,.4);
+    padding: 6px 14px;
+    border-radius: 4px;
+    font-weight: 600;
+  }
+  .topbar .turn-banner.your-turn {
+    background: var(--gold);
+    color: #2a1a00;
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+  .topbar .turn-timer {
+    margin-left: 10px;
+    font-family: monospace;
+    color: var(--gold-bright);
+    font-weight: 700;
+  }
+  .topbar .turn-timer.urgent { color: #ff5555; animation: blink 1s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: .3; } }
+  .topbar button.iconbtn {
+    background: rgba(255,255,255,.08);
+    padding: 6px 10px;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .topbar button.iconbtn:hover:not(:disabled) { background: rgba(255,255,255,.16); }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(212, 160, 23, .6); }
+    50% { box-shadow: 0 0 0 8px rgba(212, 160, 23, 0); }
+  }
+
+  .table {
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Opponent seats positioned in an arc around top of table */
+  .opponent {
+    position: absolute;
+    text-align: center;
+    transform: translate(-50%, 0);
+    transition: opacity .2s;
+  }
+  .opponent.disconnected { opacity: .35; }
+  .opponent.eliminated { opacity: .35; filter: grayscale(.7); }
+  .opponent .stack {
+    position: relative;
+    height: 70px;
+    width: 90px;
+    margin: 0 auto;
+  }
+  .opponent .stack .back {
+    position: absolute;
+    width: 46px;
+    height: 64px;
+    border-radius: 5px;
+    background: repeating-linear-gradient(45deg, #1a3a5c, #1a3a5c 4px, #234970 4px, #234970 8px);
+    border: 1.5px solid #0a1a2c;
+    box-shadow: 0 1px 2px rgba(0,0,0,.4);
+    top: 0;
+  }
+  .opponent .name { font-weight: 600; font-size: 13px; margin-top: 4px; }
+  .opponent .meta { font-size: 11px; color: #cfd; }
+  .opponent .meta .score { color: var(--gold-bright); font-weight: 700; }
+  .opponent.active-turn .name { color: var(--gold-bright); }
+  .opponent.active-turn .stack .back:last-child {
+    box-shadow: 0 0 0 2px var(--gold), 0 1px 6px rgba(212,160,23,.6);
+  }
+
+  /* Center: deck + discard */
+  .center-area {
+    position: absolute;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    gap: 60px;
+    align-items: center;
+  }
+  .pile { text-align: center; }
+  .pile .label { font-size: 11px; color: #cdd; margin-top: 6px; letter-spacing: 2px; }
+  .pile .count { font-size: 11px; color: #9d9; }
+
+  .deck-card {
+    width: 70px; height: 98px;
+    border-radius: 7px;
+    background: repeating-linear-gradient(45deg, #1a3a5c, #1a3a5c 5px, #234970 5px, #234970 10px);
+    border: 2px solid #0a1a2c;
+    box-shadow: 0 3px 8px rgba(0,0,0,.5);
+    cursor: pointer;
+    transition: transform .1s;
+  }
+  .deck-card.disabled { cursor: not-allowed; opacity: .6; }
+  .deck-card:not(.disabled):hover { transform: translateY(-2px); }
+  .deck-empty {
+    width: 70px; height: 98px;
+    border-radius: 7px;
+    border: 2px dashed rgba(255,255,255,.25);
+  }
+
+  .discard-area {
+    display: flex; gap: 4px;
+    min-width: 70px;
+    min-height: 98px;
+    align-items: center;
+  }
+  .discard-card-wrap.pickable { cursor: pointer; }
+  .discard-card-wrap.pickable:hover .card { transform: translateY(-6px); box-shadow: 0 6px 14px rgba(45, 108, 223, .5); }
+
+  /* ---------- Card ---------- */
+  .card {
+    width: 70px; height: 98px;
+    border-radius: 7px;
+    background: var(--card-bg);
+    color: var(--black);
+    border: 1px solid #999;
+    box-shadow: 0 2px 5px rgba(0,0,0,.4);
+    position: relative;
+    user-select: none;
+    transition: transform .12s, box-shadow .12s;
+  }
+  .card.red { color: var(--red); }
+  .card .corner {
+    position: absolute;
+    font-weight: 700;
+    line-height: 1;
+    font-family: Georgia, serif;
+  }
+  .card .corner.tl { top: 5px; left: 6px; text-align: left; }
+  .card .corner.br { bottom: 5px; right: 6px; transform: rotate(180deg); text-align: left; }
+  .card .corner .rank { font-size: 17px; }
+  .card .corner .suit { font-size: 15px; line-height: 1; }
+  .card .center-suit {
+    position: absolute;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 32px;
+  }
+  .card .center-suit.red { color: var(--red); }
+
+  /* ---------- My hand ---------- */
+  .hand-area {
+    background: rgba(0,0,0,.32);
+    border-top: 1px solid rgba(0,0,0,.3);
+    padding: 12px 20px 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+  .me-info {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    font-size: 13px;
+  }
+  .me-info .name { font-weight: 700; font-size: 15px; }
+  .me-info .score { color: var(--gold-bright); }
+  .me-info .handsum { color: #b9f; font-weight: 700; }
+  .me-info .actions { display: flex; gap: 10px; }
+
+  .my-hand {
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+    gap: 8px;
+    height: 120px;
+  }
+  .my-hand .card {
+    cursor: pointer;
+    transition: transform .15s, box-shadow .15s, border-color .15s;
+  }
+  .my-hand .card.selected {
+    transform: translateY(-18px);
+    border-color: var(--blue);
+    box-shadow: 0 6px 14px rgba(45, 108, 223, .6), 0 0 0 2px var(--blue);
+  }
+  .my-hand .card:not(.selected):hover { transform: translateY(-6px); }
+
+  /* Pick prompt */
+  .pick-prompt {
+    position: absolute;
+    left: 50%;
+    bottom: 240px;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,.85);
+    border: 1px solid var(--gold);
+    border-radius: 8px;
+    padding: 14px 22px;
+    font-size: 14px;
+    box-shadow: 0 8px 20px rgba(0,0,0,.6);
+  }
+
+  /* ---------- Round end / game end overlays ---------- */
+  .overlay {
+    position: absolute; inset: 0;
+    background: rgba(0,0,0,.7);
+    display: flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(3px);
+    z-index: 50;
+  }
+  .overlay .panel {
+    background: #1c2c1c;
+    border: 1px solid rgba(255,255,255,.1);
+    border-radius: 12px;
+    padding: 28px 36px;
+    min-width: 560px;
+    max-width: 800px;
+    box-shadow: 0 20px 50px rgba(0,0,0,.6);
+  }
+  .overlay h2 { margin: 0 0 8px; color: var(--gold-bright); }
+  .overlay .declare-result {
+    margin: 10px 0 18px;
+    padding: 10px 14px;
+    border-radius: 6px;
+    font-size: 14px;
+  }
+  .overlay .declare-result.ok { background: rgba(46, 160, 67, .25); border: 1px solid #2ea043; }
+  .overlay .declare-result.bad { background: rgba(192, 57, 43, .25); border: 1px solid #c0392b; }
+  .reveal-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255,255,255,.08);
+  }
+  .reveal-row:last-child { border-bottom: none; }
+  .reveal-name { width: 130px; font-weight: 600; }
+  .reveal-name .marker { font-size: 11px; color: var(--gold-bright); margin-left: 4px; }
+  .reveal-hand { display: flex; gap: 4px; flex: 1; }
+  .reveal-hand .card { width: 44px; height: 62px; }
+  .reveal-hand .card .corner .rank { font-size: 11px; }
+  .reveal-hand .card .corner .suit { font-size: 10px; }
+  .reveal-hand .card .center-suit { font-size: 18px; }
+  .reveal-total { width: 60px; text-align: right; font-weight: 700; font-size: 16px; color: var(--gold-bright); }
+  .reveal-score { width: 80px; text-align: right; font-size: 12px; color: #cfd; }
+  .overlay-actions { display: flex; justify-content: flex-end; margin-top: 20px; gap: 10px; }
+  .winner-name { font-size: 28px; color: var(--gold-bright); font-weight: 800; margin: 12px 0; }
+
+  /* Scoreboard / rules modals */
+  .modal-close {
+    position: absolute;
+    top: 14px;
+    right: 16px;
+    background: transparent;
+    border: none;
+    color: #aaa;
+    font-size: 22px;
+    cursor: pointer;
+    padding: 0 6px;
+  }
+  .modal-close:hover { color: #fff; background: transparent; }
+  .scoreboard-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 14px;
+    font-size: 13px;
+  }
+  .scoreboard-table th, .scoreboard-table td {
+    padding: 8px 10px;
+    text-align: right;
+    border-bottom: 1px solid rgba(255,255,255,.07);
+  }
+  .scoreboard-table th { color: #bbb; font-weight: 600; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; }
+  .scoreboard-table th:first-child, .scoreboard-table td:first-child { text-align: left; }
+  .scoreboard-table .total-col { color: var(--gold-bright); font-weight: 700; }
+  .scoreboard-table tr.eliminated td { color: #888; text-decoration: line-through; }
+  .scoreboard-table tr.eliminated td.total-col { color: #c66; }
+
+  .rules-content { font-size: 14px; line-height: 1.6; color: #ddd; }
+  .rules-content h3 { color: var(--gold-bright); margin: 14px 0 6px; font-size: 14px; letter-spacing: 1px; }
+  .rules-content ul { margin: 4px 0 8px 18px; padding: 0; }
+  .rules-content li { margin-bottom: 4px; }
+  .rules-content code {
+    background: rgba(0,0,0,.4);
+    border-radius: 3px;
+    padding: 1px 6px;
+    font-size: 12px;
+    color: #f5e1a0;
+  }
+
+  .toast {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(180, 50, 50, .95);
+    color: #fff;
+    padding: 10px 18px;
+    border-radius: 6px;
+    font-size: 13px;
+    z-index: 100;
+    animation: fadeIn .2s;
+  }
+  @keyframes fadeIn { from { opacity: 0; transform: translate(-50%, -10px); } to { opacity: 1; } }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<!-- ---------- Lobby (pre-join) ---------- -->
+<div id="screen-lobby" class="screen-lobby">
+  <div class="lobby-card" id="lobbyPanel">
+    <h1>Least Score</h1>
+    <div class="tag">Online multiplayer · 2–6 players</div>
+
+    <div id="lobbyJoinUI">
+      <label>Your name</label>
+      <input id="inputName" maxlength="20" placeholder="e.g. Alice" />
+
+      <div class="lobby-row">
+        <button class="primary" id="btnCreate">Create Game</button>
+      </div>
+      <div class="lobby-divider">— OR —</div>
+      <label>Game ID</label>
+      <input id="inputGameId" maxlength="6" placeholder="6 letters/digits" style="text-transform: uppercase; letter-spacing: 4px; font-family: monospace;" />
+      <div class="lobby-row">
+        <button id="btnJoin">Join Game</button>
+      </div>
+      <div class="lobby-err" id="lobbyErr"></div>
+    </div>
+
+    <!-- Post-join lobby panel -->
+    <div id="lobbyRoomUI" class="hidden">
+      <div class="room-header">
+        <div class="label">GAME ID</div>
+        <div class="room-id"><span id="roomIdDisplay"></span><span class="copy" id="copyId">copy</span></div>
+        <div class="tag">Share this with the other players</div>
+      </div>
+      <ul class="player-list" id="playerList"></ul>
+
+      <div class="settings-block">
+        <h3>Game Settings</h3>
+        <div class="settings-row">
+          <label>Eliminate at</label>
+          <div class="pill-group" id="settingsEliminate"></div>
+        </div>
+        <div class="settings-row">
+          <label>Turn timer</label>
+          <div class="pill-group" id="settingsTimer"></div>
+        </div>
+      </div>
+
+      <div class="lobby-row">
+        <button class="primary" id="btnStart">Start Game</button>
+        <button id="btnLobbyRules">Rules</button>
+      </div>
+      <div class="lobby-err" id="lobbyErr2"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ---------- Game screen ---------- -->
+<div id="screen-game" class="screen-game hidden">
+  <div class="topbar">
+    <div class="left">
+      <span>Round <b id="topRound">1</b></span>
+      <span>Game <span class="room" id="topRoom"></span></span>
+      <span id="topDecks"></span>
+    </div>
+    <div class="left">
+      <div class="turn-banner" id="turnBanner">Waiting…</div>
+      <span id="turnTimer" class="turn-timer"></span>
+    </div>
+    <div class="right">
+      <button class="iconbtn" id="btnRules">Rules</button>
+      <button class="iconbtn" id="btnScoreboard">Scoreboard</button>
+    </div>
+  </div>
+
+  <div class="table" id="table">
+    <div id="opponents"></div>
+
+    <div class="center-area">
+      <div class="pile">
+        <div id="deckSlot"></div>
+        <div class="label">DECK</div>
+        <div class="count" id="deckCount"></div>
+      </div>
+      <div class="pile">
+        <div class="discard-area" id="discardArea"></div>
+        <div class="label">DISCARD</div>
+        <div class="count" id="discardLabel"></div>
+      </div>
+    </div>
+
+    <div id="pickPrompt" class="pick-prompt hidden"></div>
+  </div>
+
+  <div class="hand-area">
+    <div class="me-info">
+      <div>
+        <span class="name" id="meName"></span> ·
+        <span class="score" id="meScore"></span> ·
+        <span class="handsum">Hand: <span id="meHandTotal">0</span></span>
+      </div>
+      <div class="actions">
+        <button id="btnDiscard">Discard Selected</button>
+        <button class="declare" id="btnDeclare">DECLARE</button>
+      </div>
+    </div>
+    <div class="my-hand" id="myHand"></div>
+  </div>
+</div>
+
+<!-- ---------- Round end / game end overlay ---------- -->
+<div id="overlay" class="overlay hidden">
+  <div class="panel" id="overlayPanel"></div>
+</div>
+
+<!-- ---------- Rules modal ---------- -->
+<div id="rulesModal" class="overlay hidden">
+  <div class="panel" style="position: relative; max-width: 640px;">
+    <button class="modal-close" id="closeRules">×</button>
+    <h2>Rules</h2>
+    <div class="rules-content">
+      <p>The goal: have the strictly lowest hand total when you declare. Score 0 if you're right, +40 penalty if you're wrong. Players are eliminated when they hit the score limit. Last player standing wins.</p>
+
+      <h3>Card values</h3>
+      <ul>
+        <li>Ace = <code>1</code></li>
+        <li>2 – 10 = face value</li>
+        <li>J / Q / K = <code>10</code></li>
+      </ul>
+
+      <h3>On your turn</h3>
+      <ol>
+        <li><b>Discard</b> a valid combination from your hand, OR</li>
+        <li><b>Declare</b> if you believe you have the strictly lowest hand total (not allowed in round 1).</li>
+      </ol>
+      <p>After discarding, draw one card from the deck (hidden) <em>or</em> take any one card from the previous player's discard.</p>
+
+      <h3>Valid discards</h3>
+      <ul>
+        <li><b>Single card</b> — any one card</li>
+        <li><b>Pair</b> — 2 cards of the same rank</li>
+        <li><b>Four of a kind</b> — 4 cards of the same rank</li>
+        <li><b>Sequence of 3</b> — 3 consecutive ranks (any suits). Ace may be low (A-2-3) or high (Q-K-A) but no wrap.</li>
+        <li><b>Sequence of 5</b> — 5 consecutive ranks (any suits). Same ace rule.</li>
+        <li><b>Flush of 5</b> — any 5 cards of the same suit</li>
+      </ul>
+      <p><b>Three of a kind is NOT valid.</b></p>
+
+      <h3>Declaring</h3>
+      <ul>
+        <li>If your hand total is <b>strictly lower</b> than everyone else's: you score <code>0</code>, everyone else adds their hand total to their cumulative score.</li>
+        <li>If you don't have the strictly lowest: you take a <b>+40 penalty</b>, and everyone else still adds their hand total.</li>
+      </ul>
+
+      <h3>Other</h3>
+      <ul>
+        <li>5–6 player games use two shuffled decks.</li>
+        <li>If the deck runs out, all discards except the current top are reshuffled into a new deck.</li>
+        <li>You cannot declare in the first round.</li>
+        <li>If turn timer is enabled, you have 60s per turn — if you don't act, a random card is auto-discarded and a card is auto-drawn from the deck.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ---------- Scoreboard modal ---------- -->
+<div id="scoreModal" class="overlay hidden">
+  <div class="panel" style="position: relative; max-width: 720px;">
+    <button class="modal-close" id="closeScore">×</button>
+    <h2>Scoreboard</h2>
+    <div id="scoreModalBody"></div>
+  </div>
+</div>
+
+<div id="toastContainer"></div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+(function () {
+  const SUIT_GLYPH = { S: '♠', H: '♥', D: '♦', C: '♣' };
+  const SUIT_IS_RED = { H: true, D: true, S: false, C: false };
+
+  const socket = io({ transports: ['websocket', 'polling'] });
+  let myPlayerId = null;
+  let myGameId = null;
+  let state = null;
+  let selectedIdx = new Set();
+
+  // ---------- DOM helpers ----------
+  const $ = (id) => document.getElementById(id);
+
+  function showToast(msg) {
+    const t = document.createElement('div');
+    t.className = 'toast';
+    t.textContent = msg;
+    $('toastContainer').appendChild(t);
+    setTimeout(() => t.remove(), 2800);
+  }
+
+  function renderCard(card, opts = {}) {
+    const el = document.createElement('div');
+    el.className = 'card' + (SUIT_IS_RED[card.suit] ? ' red' : '');
+    const glyph = SUIT_GLYPH[card.suit];
+    const tl = document.createElement('div');
+    tl.className = 'corner tl';
+    tl.innerHTML = `<div class="rank">${card.rank}</div><div class="suit">${glyph}</div>`;
+    const br = document.createElement('div');
+    br.className = 'corner br';
+    br.innerHTML = `<div class="rank">${card.rank}</div><div class="suit">${glyph}</div>`;
+    const c = document.createElement('div');
+    c.className = 'center-suit' + (SUIT_IS_RED[card.suit] ? ' red' : '');
+    c.textContent = glyph;
+    el.append(tl, c, br);
+    if (opts.onClick) el.addEventListener('click', opts.onClick);
+    if (opts.selected) el.classList.add('selected');
+    return el;
+  }
+
+  // ---------- Lobby UI ----------
+  $('btnCreate').addEventListener('click', () => {
+    const name = $('inputName').value.trim();
+    if (!name) { $('lobbyErr').textContent = 'Enter your name first.'; return; }
+    $('lobbyErr').textContent = '';
+    socket.emit('createGame', { name });
+  });
+
+  $('btnJoin').addEventListener('click', () => {
+    const name = $('inputName').value.trim();
+    const gameId = $('inputGameId').value.trim().toUpperCase();
+    if (!name) { $('lobbyErr').textContent = 'Enter your name first.'; return; }
+    if (!gameId) { $('lobbyErr').textContent = 'Enter a Game ID.'; return; }
+    $('lobbyErr').textContent = '';
+    socket.emit('joinGame', { gameId, name });
+  });
+
+  $('inputGameId').addEventListener('input', (e) => {
+    e.target.value = e.target.value.toUpperCase();
+  });
+
+  $('btnStart').addEventListener('click', () => socket.emit('startGame'));
+
+  // Settings pill renderers (host can change; others see read-only)
+  function renderSettingsPills() {
+    if (!state) return;
+    const youAreHost = state.you && state.you.isHost;
+    const elimContainer = $('settingsEliminate');
+    elimContainer.innerHTML = '';
+    [50, 75, 100, 150, 200].forEach(v => {
+      const b = document.createElement('button');
+      b.className = 'pill' + (state.settings.eliminateAt === v ? ' active' : '');
+      b.textContent = v;
+      b.disabled = !youAreHost;
+      b.addEventListener('click', () => socket.emit('updateSettings', { eliminateAt: v }));
+      elimContainer.appendChild(b);
+    });
+    const timerContainer = $('settingsTimer');
+    timerContainer.innerHTML = '';
+    [['Yes (60s)', true], ['No', false]].forEach(([label, val]) => {
+      const b = document.createElement('button');
+      b.className = 'pill' + (state.settings.turnTimerEnabled === val ? ' active' : '');
+      b.textContent = label;
+      b.disabled = !youAreHost;
+      b.addEventListener('click', () => socket.emit('updateSettings', { turnTimerEnabled: val }));
+      timerContainer.appendChild(b);
+    });
+  }
+
+  // Modal toggles
+  function showModal(id) { $(id).classList.remove('hidden'); }
+  function hideModal(id) { $(id).classList.add('hidden'); }
+  $('btnRules').addEventListener('click', () => showModal('rulesModal'));
+  $('btnLobbyRules').addEventListener('click', () => showModal('rulesModal'));
+  $('closeRules').addEventListener('click', () => hideModal('rulesModal'));
+  $('btnScoreboard').addEventListener('click', () => {
+    renderScoreModal();
+    showModal('scoreModal');
+  });
+  $('closeScore').addEventListener('click', () => hideModal('scoreModal'));
+
+  $('copyId').addEventListener('click', () => {
+    if (!myGameId) return;
+    navigator.clipboard.writeText(myGameId).then(() => {
+      $('copyId').textContent = 'copied!';
+      setTimeout(() => $('copyId').textContent = 'copy', 1400);
+    });
+  });
+
+  // ---------- Game UI ----------
+  $('btnDiscard').addEventListener('click', () => {
+    if (selectedIdx.size === 0) { showToast('Select cards to discard.'); return; }
+    socket.emit('discard', { cardIndices: [...selectedIdx] });
+  });
+
+  $('btnDeclare').addEventListener('click', () => {
+    if (!confirm("Declare? You're betting your hand is the strictly lowest.")) return;
+    socket.emit('declare');
+  });
+
+  // ---------- Socket events ----------
+  socket.on('joined', ({ gameId, playerId }) => {
+    myGameId = gameId;
+    myPlayerId = playerId;
+    // remember for reconnect
+    try {
+      sessionStorage.setItem('ls_gameId', gameId);
+      sessionStorage.setItem('ls_playerId', playerId);
+      sessionStorage.setItem('ls_name', $('inputName').value.trim());
+    } catch (e) {}
+  });
+
+  socket.on('errorMsg', ({ message }) => {
+    $('lobbyErr').textContent = message;
+    $('lobbyErr2').textContent = message;
+    showToast(message);
+  });
+
+  socket.on('state', (s) => {
+    state = s;
+    render();
+    updateTimerDisplay();
+    startTimerLoop();
+  });
+
+  socket.on('connect', () => {
+    // Reconnect attempt: rejoin previous game with same name
+    const gameId = sessionStorage.getItem('ls_gameId');
+    const name = sessionStorage.getItem('ls_name');
+    if (gameId && name) {
+      socket.emit('joinGame', { gameId, name });
+    }
+  });
+
+  // ---------- Rendering ----------
+  function render() {
+    if (!state) return;
+
+    if (state.state === 'lobby') {
+      $('screen-lobby').classList.remove('hidden');
+      $('screen-game').classList.add('hidden');
+      $('lobbyJoinUI').classList.add('hidden');
+      $('lobbyRoomUI').classList.remove('hidden');
+      $('roomIdDisplay').textContent = state.id;
+      const list = $('playerList');
+      list.innerHTML = '';
+      state.players.forEach(p => {
+        const li = document.createElement('li');
+        li.textContent = p.name;
+        if (p.isHost) {
+          const tag = document.createElement('span');
+          tag.className = 'host-tag';
+          tag.textContent = 'HOST';
+          li.appendChild(tag);
+        }
+        if (!p.connected) {
+          const tag = document.createElement('span');
+          tag.style.fontSize = '11px';
+          tag.style.color = '#888';
+          tag.textContent = '(disconnected)';
+          li.appendChild(tag);
+        }
+        list.appendChild(li);
+      });
+      const youAreHost = state.you && state.you.isHost;
+      const enoughPlayers = state.players.length >= 2;
+      $('btnStart').disabled = !(youAreHost && enoughPlayers);
+      $('btnStart').textContent = youAreHost
+        ? (enoughPlayers ? `Start Game (${state.players.length})` : 'Waiting for players…')
+        : 'Waiting for host…';
+      renderSettingsPills();
+      return;
+    }
+
+    // In-game
+    $('screen-lobby').classList.add('hidden');
+    $('screen-game').classList.remove('hidden');
+
+    $('topRound').textContent = state.round;
+    $('topRoom').textContent = state.id;
+    $('topDecks').textContent = `${state.numDecks} deck${state.numDecks > 1 ? 's' : ''} · eliminate at ${state.settings.eliminateAt}`;
+
+    const isMyTurn = !!(state.you && state.you.isYourTurn);
+    const turnPlayer = state.players.find(p => p.playerId === state.currentPlayerId);
+    const banner = $('turnBanner');
+    if (state.state === 'roundEnd' || state.state === 'gameEnd') {
+      banner.textContent = state.state === 'gameEnd' ? 'Game Over' : 'Round Over';
+      banner.classList.remove('your-turn');
+    } else if (isMyTurn) {
+      banner.textContent = state.state === 'awaitingPick'
+        ? 'Your pick: take from deck or discard'
+        : 'Your turn — discard or declare';
+      banner.classList.add('your-turn');
+    } else {
+      banner.textContent = turnPlayer ? `${turnPlayer.name}'s turn…` : 'Waiting…';
+      banner.classList.remove('your-turn');
+    }
+
+    renderOpponents();
+    renderCenter();
+    renderHand();
+    renderOverlay();
+  }
+
+  function opponentSeats(n) {
+    // returns array of {leftPct, topPx} for n opponents, arrayed around top half of the table
+    if (n === 1) return [{ leftPct: 50, topPx: 30 }];
+    if (n === 2) return [{ leftPct: 22, topPx: 60 }, { leftPct: 78, topPx: 60 }];
+    if (n === 3) return [{ leftPct: 18, topPx: 80 }, { leftPct: 50, topPx: 30 }, { leftPct: 82, topPx: 80 }];
+    if (n === 4) return [
+      { leftPct: 12, topPx: 110 }, { leftPct: 35, topPx: 40 },
+      { leftPct: 65, topPx: 40 }, { leftPct: 88, topPx: 110 }
+    ];
+    // 5 opponents (6-player game)
+    return [
+      { leftPct: 10, topPx: 130 }, { leftPct: 28, topPx: 50 }, { leftPct: 50, topPx: 25 },
+      { leftPct: 72, topPx: 50 }, { leftPct: 90, topPx: 130 }
+    ];
+  }
+
+  function renderOpponents() {
+    const container = $('opponents');
+    container.innerHTML = '';
+    const others = state.players.filter(p => p.playerId !== state.you?.playerId);
+    const seats = opponentSeats(others.length);
+    others.forEach((p, i) => {
+      const seat = seats[i] || { leftPct: 50, topPx: 30 };
+      const el = document.createElement('div');
+      el.className = 'opponent';
+      if (!p.connected) el.classList.add('disconnected');
+      if (p.eliminated) el.classList.add('eliminated');
+      if (p.playerId === state.currentPlayerId && !p.eliminated) el.classList.add('active-turn');
+      el.style.left = seat.leftPct + '%';
+      el.style.top = seat.topPx + 'px';
+
+      const stack = document.createElement('div');
+      stack.className = 'stack';
+      const showCount = Math.min(p.cardCount, 5);
+      for (let k = 0; k < showCount; k++) {
+        const b = document.createElement('div');
+        b.className = 'back';
+        b.style.left = (k * 9) + 'px';
+        b.style.top = (k * 1.5) + 'px';
+        stack.appendChild(b);
+      }
+      if (p.cardCount === 0) {
+        const empty = document.createElement('div');
+        empty.style.cssText = 'width:46px;height:64px;border:1.5px dashed rgba(255,255,255,.2);border-radius:5px;';
+        stack.appendChild(empty);
+      }
+      el.appendChild(stack);
+
+      const name = document.createElement('div');
+      name.className = 'name';
+      name.textContent = p.name + (p.isHost ? ' ♛' : '');
+      el.appendChild(name);
+
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+      meta.innerHTML = `<span class="score">${p.score}</span> pts · ${p.cardCount} cards`
+        + (p.eliminated ? ' · OUT' : '')
+        + (!p.connected ? ' · offline' : '');
+      el.appendChild(meta);
+
+      container.appendChild(el);
+    });
+  }
+
+  function renderCenter() {
+    // Deck
+    const deckSlot = $('deckSlot');
+    deckSlot.innerHTML = '';
+    const canPickDeck = state.you?.isYourTurn && state.state === 'awaitingPick';
+    if (state.deckCount > 0) {
+      const dc = document.createElement('div');
+      dc.className = 'deck-card' + (canPickDeck ? '' : ' disabled');
+      if (canPickDeck) dc.addEventListener('click', () => socket.emit('pick', { source: 'deck' }));
+      deckSlot.appendChild(dc);
+    } else {
+      const empty = document.createElement('div');
+      empty.className = 'deck-empty';
+      deckSlot.appendChild(empty);
+    }
+    $('deckCount').textContent = state.deckCount + ' left';
+
+    // Discard top group
+    const discardArea = $('discardArea');
+    discardArea.innerHTML = '';
+    const top = state.discardTop || [];
+    const canPickDiscard = state.you?.isYourTurn && state.state === 'awaitingPick' && top.length > 0;
+    top.forEach((card, idx) => {
+      const wrap = document.createElement('div');
+      wrap.className = 'discard-card-wrap' + (canPickDiscard ? ' pickable' : '');
+      const c = renderCard(card);
+      wrap.appendChild(c);
+      if (canPickDiscard) {
+        wrap.addEventListener('click', () => socket.emit('pick', { source: 'discard', cardIdx: idx }));
+      }
+      discardArea.appendChild(wrap);
+    });
+    if (top.length === 0) {
+      const empty = document.createElement('div');
+      empty.style.cssText = 'width:70px;height:98px;border:2px dashed rgba(255,255,255,.2);border-radius:7px;';
+      discardArea.appendChild(empty);
+    }
+    $('discardLabel').textContent = top.length ? `${top.length} card${top.length>1?'s':''}` : 'empty';
+
+    // Pick prompt
+    const prompt = $('pickPrompt');
+    if (state.state === 'awaitingPick' && state.you?.isYourTurn) {
+      prompt.classList.remove('hidden');
+      prompt.textContent = top.length
+        ? 'Click the deck OR any one card from the discard to pick it up.'
+        : 'Click the deck to draw a card.';
+    } else {
+      prompt.classList.add('hidden');
+    }
+  }
+
+  function renderHand() {
+    const me = state.you;
+    if (!me) return;
+    $('meName').textContent = me.name + (me.isHost ? ' ♛' : '');
+    $('meScore').textContent = me.score + ' pts';
+
+    const hand = $('myHand');
+    hand.innerHTML = '';
+    me.hand.forEach((card, idx) => {
+      const c = renderCard(card, {
+        selected: selectedIdx.has(idx),
+        onClick: () => {
+          if (!me.isYourTurn || state.state !== 'awaitingDiscard') return;
+          if (selectedIdx.has(idx)) selectedIdx.delete(idx);
+          else selectedIdx.add(idx);
+          render();
+        }
+      });
+      hand.appendChild(c);
+    });
+
+    $('meHandTotal').textContent = me.handTotal;
+
+    const canDiscard = me.isYourTurn && state.state === 'awaitingDiscard';
+    $('btnDiscard').disabled = !canDiscard || selectedIdx.size === 0;
+    const canDeclareNow = canDiscard && state.canDeclare;
+    $('btnDeclare').disabled = !canDeclareNow;
+    $('btnDeclare').title = (canDiscard && !state.canDeclare) ? 'Cannot declare in round 1' : '';
+    if (state.state !== 'awaitingDiscard' || !me.isYourTurn) {
+      // clear selection if it's no longer my turn (or moved to pick step)
+      selectedIdx.clear();
+    }
+  }
+
+  // ---------- Turn timer countdown ----------
+  let timerInterval = null;
+  function startTimerLoop() {
+    if (timerInterval) return;
+    timerInterval = setInterval(updateTimerDisplay, 250);
+  }
+  function updateTimerDisplay() {
+    const el = $('turnTimer');
+    if (!state || !state.turnDeadline || state.state === 'roundEnd' || state.state === 'gameEnd') {
+      el.textContent = '';
+      el.classList.remove('urgent');
+      return;
+    }
+    const remainingMs = Math.max(0, state.turnDeadline - Date.now());
+    const s = Math.ceil(remainingMs / 1000);
+    el.textContent = `⏱ ${s}s`;
+    el.classList.toggle('urgent', s <= 10);
+  }
+
+  // ---------- Scoreboard ----------
+  function renderScoreModal() {
+    $('scoreModalBody').innerHTML = '';
+    $('scoreModalBody').appendChild(buildScoreboardTable());
+  }
+
+  function buildScoreboardTable() {
+    const wrap = document.createElement('div');
+    if (!state.roundHistory || state.roundHistory.length === 0) {
+      const p = document.createElement('p');
+      p.style.color = '#bbb';
+      p.style.fontSize = '13px';
+      p.textContent = 'No rounds completed yet.';
+      wrap.appendChild(p);
+      return wrap;
+    }
+    const table = document.createElement('table');
+    table.className = 'scoreboard-table';
+    const thead = document.createElement('thead');
+    const headRow = document.createElement('tr');
+    const nameTh = document.createElement('th'); nameTh.textContent = 'Player';
+    headRow.appendChild(nameTh);
+    state.roundHistory.forEach(r => {
+      const th = document.createElement('th');
+      th.textContent = 'R' + r.round;
+      headRow.appendChild(th);
+    });
+    const totalTh = document.createElement('th'); totalTh.textContent = 'Total'; totalTh.className = 'total-col';
+    headRow.appendChild(totalTh);
+    thead.appendChild(headRow);
+    table.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
+    const sorted = [...state.players].sort((a, b) => a.score - b.score);
+    sorted.forEach(p => {
+      const tr = document.createElement('tr');
+      if (p.eliminated) tr.classList.add('eliminated');
+      const nameTd = document.createElement('td');
+      nameTd.textContent = p.name + (p.isHost ? ' ♛' : '') + (p.eliminated ? ' (out)' : '');
+      tr.appendChild(nameTd);
+      state.roundHistory.forEach(r => {
+        const td = document.createElement('td');
+        const v = r.perPlayer[p.playerId];
+        td.textContent = (v === undefined || v === null) ? '—' : (v === 0 ? '0' : '+' + v);
+        if (r.declarerId === p.playerId) {
+          td.style.background = r.correct ? 'rgba(46,160,67,.18)' : 'rgba(192,57,43,.18)';
+          td.title = r.correct ? 'Declared correctly' : 'Declared incorrectly';
+        }
+        tr.appendChild(td);
+      });
+      const totalTd = document.createElement('td');
+      totalTd.textContent = p.score;
+      totalTd.className = 'total-col';
+      tr.appendChild(totalTd);
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    wrap.appendChild(table);
+    return wrap;
+  }
+
+  function renderOverlay() {
+    const overlay = $('overlay');
+    const panel = $('overlayPanel');
+    if (state.state !== 'roundEnd' && state.state !== 'gameEnd') {
+      overlay.classList.add('hidden');
+      return;
+    }
+    overlay.classList.remove('hidden');
+    panel.innerHTML = '';
+
+    if (state.state === 'gameEnd') {
+      const winner = state.players.find(p => !p.eliminated) || state.players.reduce((a, b) => a.score < b.score ? a : b);
+      const h = document.createElement('h2'); h.textContent = 'Game Over'; panel.appendChild(h);
+      const w = document.createElement('div'); w.className = 'winner-name'; w.textContent = winner ? `${winner.name} wins!` : 'No winner';
+      panel.appendChild(w);
+      const sub = document.createElement('div'); sub.style.color = '#bbb'; sub.style.fontSize = '13px';
+      sub.textContent = 'Final standings';
+      panel.appendChild(sub);
+      panel.appendChild(buildScoreboardTable());
+      return;
+    }
+
+    // Round end
+    const res = state.lastRoundResult;
+    if (!res) return;
+    const declarer = state.players.find(p => p.playerId === res.declarerId);
+    const h = document.createElement('h2');
+    h.textContent = `Round ${state.round} Results`;
+    panel.appendChild(h);
+    const verdict = document.createElement('div');
+    verdict.className = 'declare-result ' + (res.correct ? 'ok' : 'bad');
+    verdict.textContent = res.correct
+      ? `${declarer.name} declared with ${res.declarerTotal} and was correct — scores 0 this round.`
+      : `${declarer.name} declared with ${res.declarerTotal} but didn't have the lowest — +40 penalty.`;
+    panel.appendChild(verdict);
+
+    res.hands.forEach(h => {
+      const player = state.players.find(p => p.playerId === h.playerId);
+      const row = document.createElement('div');
+      row.className = 'reveal-row';
+      const nameDiv = document.createElement('div');
+      nameDiv.className = 'reveal-name';
+      nameDiv.innerHTML = escapeHtml(h.name) + (h.playerId === res.declarerId ? ' <span class="marker">DECLARED</span>' : '') + (h.eliminated ? ' <span class="marker">OUT</span>' : '');
+      const handDiv = document.createElement('div');
+      handDiv.className = 'reveal-hand';
+      h.hand.forEach(c => handDiv.appendChild(renderCard(c)));
+      const totDiv = document.createElement('div');
+      totDiv.className = 'reveal-total';
+      totDiv.textContent = h.total !== null ? `=${h.total}` : '';
+      const scoreDiv = document.createElement('div');
+      scoreDiv.className = 'reveal-score';
+      scoreDiv.textContent = `${player.score} pts`;
+      row.append(nameDiv, handDiv, totDiv, scoreDiv);
+      panel.appendChild(row);
+    });
+
+    // Scoreboard table after the reveal
+    const sbHeader = document.createElement('h3');
+    sbHeader.style.cssText = 'margin: 22px 0 0; color: #ddd; font-size: 13px; letter-spacing: 1px; text-transform: uppercase;';
+    sbHeader.textContent = 'Standings';
+    panel.appendChild(sbHeader);
+    panel.appendChild(buildScoreboardTable());
+
+    const actions = document.createElement('div');
+    actions.className = 'overlay-actions';
+    if (state.you?.isHost) {
+      const btn = document.createElement('button');
+      btn.className = 'primary';
+      btn.textContent = 'Next Round →';
+      btn.addEventListener('click', () => socket.emit('nextRound'));
+      actions.appendChild(btn);
+    } else {
+      const wait = document.createElement('div');
+      wait.style.color = '#bbb';
+      wait.style.fontSize = '13px';
+      wait.textContent = 'Waiting for host to start the next round…';
+      actions.appendChild(wait);
+    }
+    panel.appendChild(actions);
+  }
+
+  function escapeHtml(s) {
+    return s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+})();
+</script>
+
+</body>
+</html>
