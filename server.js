@@ -503,8 +503,8 @@ function resolveDeclare(game, declarer) {
       }
     }
   } else {
-    declarer.cumulativeScore += 40;
-    perPlayer[declarer.playerId] = 40;
+    declarer.cumulativeScore += 30;
+    perPlayer[declarer.playerId] = 30;
     for (const t of totals) {
       if (t.p.playerId !== declarer.playerId) {
         const delta = t.total - declarerTotal;
