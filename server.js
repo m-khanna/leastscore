@@ -215,9 +215,9 @@ function viewFor(game, playerId) {
   const me = game.players.find(p => p.playerId === playerId);
   const myHand = me ? me.hand : [];
   const activeCount = game.players.filter(p => !p.eliminated).length;
-  // Declare is blocked only during the opening phase of round 1, until every
-  // active player has completed their first turn. After that it's available.
-  const canDeclare = game.round > 1 || (game.turnsTakenThisRound || 0) >= activeCount;
+  // Declare is blocked at the start of every round until each active player
+  // has completed their first turn of that round.
+  const canDeclare = (game.turnsTakenThisRound || 0) >= activeCount;
   return {
     id: game.id,
     state: game.state,
@@ -428,8 +428,8 @@ io.on('connection', (socket) => {
     const game = games[socket.data.gameId];
     if (!game || game.state !== 'awaitingMove') return;
     const activeCount = game.players.filter(p => !p.eliminated).length;
-    if (game.round <= 1 && (game.turnsTakenThisRound || 0) < activeCount) {
-      return sendError(socket, 'Declare unlocks after everyone has played their first turn.');
+    if ((game.turnsTakenThisRound || 0) < activeCount) {
+      return sendError(socket, 'Declare unlocks after everyone has played their first turn this round.');
     }
     const player = game.players[game.currentTurnIdx];
     if (player.playerId !== socket.data.playerId) return;

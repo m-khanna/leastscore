@@ -380,17 +380,14 @@
 
   /* Pick prompt */
   .pick-prompt {
-    position: absolute;
-    left: 50%;
-    bottom: 232px;
-    transform: translateX(-50%);
-    background: rgba(0,0,0,.7);
-    border: 1px solid rgba(212,160,23,.6);
-    border-radius: 6px;
-    padding: 6px 14px;
+    background: rgba(0,0,0,.4);
+    border: 1px solid rgba(212,160,23,.5);
+    border-radius: 4px;
+    padding: 4px 12px;
     font-size: 12px;
     color: #f5e1a0;
     white-space: nowrap;
+    align-self: center;
   }
 
   /* ---------- Round end / game end overlays ---------- */
@@ -591,7 +588,6 @@
       </div>
     </div>
 
-    <div id="pickPrompt" class="pick-prompt hidden"></div>
   </div>
 
   <div class="hand-area">
@@ -606,6 +602,7 @@
         <button class="declare" id="btnDeclare">DECLARE</button>
       </div>
     </div>
+    <div id="pickPrompt" class="pick-prompt hidden"></div>
     <div class="my-hand" id="myHand"></div>
   </div>
 </div>
@@ -660,7 +657,7 @@
           <ul>
             <li>5–6 player games use two decks.</li>
             <li>Deck runs out → reshuffle discards (except current top).</li>
-            <li>Declare unlocks once everyone has played their first turn.</li>
+            <li>Each round, declare unlocks only after every player has played their first turn that round.</li>
             <li>Turn timer (if enabled): 60s; otherwise a random card is auto-played.</li>
           </ul>
         </div>
@@ -1073,7 +1070,7 @@
     const canDeclareNow = canMove && state.canDeclare;
     $('btnDeclare').disabled = !canDeclareNow;
     $('btnDeclare').title = (canMove && !state.canDeclare)
-      ? 'Declare unlocks after everyone has played their first turn'
+      ? 'Declare unlocks after everyone has played their first turn this round'
       : '';
     if (state.state !== 'awaitingMove' || !me.isYourTurn) {
       selectedIdx.clear();
