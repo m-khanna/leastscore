@@ -652,8 +652,8 @@
 
           <h3>Declaring</h3>
           <ul>
-            <li>Strictly lowest → you score <code>0</code>; others add their hand total.</li>
-            <li>Not lowest → you take <b>+40</b>; others still add their hand total.</li>
+            <li>Strictly lowest → you score <code>0</code>; each other player gets <b>(their hand − your hand)</b>.</li>
+            <li>Not lowest → you take <b>+40</b>; each other player still gets <b>(their hand − your hand)</b>, which can be negative.</li>
           </ul>
 
           <h3>Other</h3>
@@ -1143,7 +1143,9 @@
       state.roundHistory.forEach(r => {
         const td = document.createElement('td');
         const v = r.perPlayer[p.playerId];
-        td.textContent = (v === undefined || v === null) ? '—' : (v === 0 ? '0' : '+' + v);
+        td.textContent = (v === undefined || v === null)
+          ? '—'
+          : (v > 0 ? '+' + v : String(v));
         if (r.declarerId === p.playerId) {
           td.style.background = r.correct ? 'rgba(46,160,67,.18)' : 'rgba(192,57,43,.18)';
           td.title = r.correct ? 'Declared correctly' : 'Declared incorrectly';
