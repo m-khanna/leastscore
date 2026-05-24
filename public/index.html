@@ -178,7 +178,7 @@
   .screen-game {
     position: absolute; inset: 0;
     display: grid;
-    grid-template-rows: 50px 1fr 220px;
+    grid-template-rows: 50px 1fr 256px;
   }
   .topbar {
     display: flex;
@@ -274,8 +274,8 @@
   .pile .count { font-size: 11px; color: #9d9; }
 
   .deck-card {
-    width: 70px; height: 98px;
-    border-radius: 7px;
+    width: 88px; height: 123px;
+    border-radius: 8px;
     background: repeating-linear-gradient(45deg, #1a3a5c, #1a3a5c 5px, #234970 5px, #234970 10px);
     border: 2px solid #0a1a2c;
     box-shadow: 0 3px 8px rgba(0,0,0,.5);
@@ -289,15 +289,15 @@
     transform: translateY(-6px);
   }
   .deck-empty {
-    width: 70px; height: 98px;
-    border-radius: 7px;
+    width: 88px; height: 123px;
+    border-radius: 8px;
     border: 2px dashed rgba(255,255,255,.25);
   }
 
   .discard-area {
     display: flex; gap: 4px;
-    min-width: 70px;
-    min-height: 98px;
+    min-width: 88px;
+    min-height: 123px;
     align-items: center;
   }
   .discard-card-wrap.pickable { cursor: pointer; }
@@ -309,8 +309,8 @@
 
   /* ---------- Card ---------- */
   .card {
-    width: 70px; height: 98px;
-    border-radius: 7px;
+    width: 88px; height: 123px;
+    border-radius: 8px;
     background: var(--card-bg);
     color: var(--black);
     border: 1px solid #999;
@@ -326,15 +326,15 @@
     line-height: 1;
     font-family: Georgia, serif;
   }
-  .card .corner.tl { top: 5px; left: 6px; text-align: left; }
-  .card .corner.br { bottom: 5px; right: 6px; transform: rotate(180deg); text-align: left; }
-  .card .corner .rank { font-size: 17px; }
-  .card .corner .suit { font-size: 15px; line-height: 1; }
+  .card .corner.tl { top: 6px; left: 7px; text-align: left; }
+  .card .corner.br { bottom: 6px; right: 7px; transform: rotate(180deg); text-align: left; }
+  .card .corner .rank { font-size: 21px; }
+  .card .corner .suit { font-size: 18px; line-height: 1; }
   .card .center-suit {
     position: absolute;
     left: 50%; top: 50%;
     transform: translate(-50%, -50%);
-    font-size: 32px;
+    font-size: 40px;
   }
   .card .center-suit.red { color: var(--red); }
 
@@ -364,8 +364,8 @@
     display: flex;
     justify-content: center;
     align-items: flex-end;
-    gap: 8px;
-    height: 120px;
+    gap: 10px;
+    height: 150px;
   }
   .my-hand .card {
     cursor: pointer;
@@ -497,6 +497,51 @@
   }
   @keyframes fadeIn { from { opacity: 0; transform: translate(-50%, -10px); } to { opacity: 1; } }
 
+  /* ---------- Previous-turn table (top-left of felt) ---------- */
+  .turn-table {
+    position: absolute;
+    top: 12px; left: 12px;
+    background: rgba(0,0,0,.45);
+    border: 1px solid rgba(255,255,255,.1);
+    border-radius: 8px;
+    padding: 8px 10px 4px;
+    z-index: 5;
+    box-shadow: 0 4px 12px rgba(0,0,0,.4);
+  }
+  .turn-table h4 {
+    margin: 0 0 6px;
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    color: #bbb;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .turn-table table { border-collapse: collapse; }
+  .turn-table th, .turn-table td {
+    padding: 3px 8px;
+    text-align: left;
+    border-bottom: 1px solid rgba(255,255,255,.06);
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  .turn-table tr:last-child td { border-bottom: none; }
+  .turn-table th {
+    color: #999;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    font-weight: 600;
+  }
+  .turn-table td.pname { color: #eee; font-weight: 600; }
+  .turn-table .mini-card { font-weight: 700; color: #f0f0e8; }
+  .turn-table .mini-card.red { color: #ff8a8a; }
+  .turn-table .deck-tag { color: #8cc6ff; font-style: italic; }
+  .turn-table .none { color: #777; }
+
+  /* Credit */
+  .credit { text-align: center; margin-top: 18px; font-size: 11px; color: #777; letter-spacing: 1px; }
+  .topbar .credit { margin: 0 4px 0 0; color: #8a8a8a; letter-spacing: .5px; }
+
   .hidden { display: none !important; }
 </style>
 </head>
@@ -517,11 +562,12 @@
       </div>
       <div class="lobby-divider">— OR —</div>
       <label>Game ID</label>
-      <input id="inputGameId" maxlength="6" placeholder="6 letters/digits" style="text-transform: uppercase; letter-spacing: 4px; font-family: monospace;" />
+      <input id="inputGameId" maxlength="3" inputmode="numeric" placeholder="3 digits" style="letter-spacing: 8px; font-family: monospace;" />
       <div class="lobby-row">
         <button id="btnJoin">Join Game</button>
       </div>
       <div class="lobby-err" id="lobbyErr"></div>
+      <div class="credit">Made by Mukul</div>
     </div>
 
     <!-- Post-join lobby panel -->
@@ -550,6 +596,7 @@
         <button id="btnLobbyRules">Rules</button>
       </div>
       <div class="lobby-err" id="lobbyErr2"></div>
+      <div class="credit">Made by Mukul</div>
     </div>
   </div>
 </div>
@@ -567,12 +614,14 @@
       <span id="turnTimer" class="turn-timer"></span>
     </div>
     <div class="right">
+      <span class="credit">Made by Mukul</span>
       <button class="iconbtn" id="btnRules">Rules</button>
       <button class="iconbtn" id="btnScoreboard">Scoreboard</button>
     </div>
   </div>
 
   <div class="table" id="table">
+    <div id="turnTable" class="turn-table hidden"></div>
     <div id="opponents"></div>
 
     <div class="center-area">
@@ -649,7 +698,7 @@
 
           <h3>Declaring</h3>
           <ul>
-            <li>Strictly lowest → you score <code>0</code>; each other player gets <b>(their hand − your hand)</b>.</li>
+            <li>Strictly lowest → you score <code>0</code>; each other player adds <b>their full hand total</b>.</li>
             <li>Not lowest → you take <b>+30</b>; each other player gets <b>max(0, their hand − your hand)</b>.</li>
           </ul>
 
@@ -703,6 +752,52 @@
     setTimeout(() => t.remove(), 2800);
   }
 
+  // ---------- Sound (Web Audio, synthesized) ----------
+  let audioCtx = null;
+  function getAudioCtx() {
+    try {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    } catch (e) {}
+    return audioCtx;
+  }
+  // Prime/resume the audio context on the first user gesture (autoplay policy).
+  document.addEventListener('click', () => getAudioCtx());
+
+  function tone({ freq, dur, type = 'sine', gain = 0.15, when = 0 }) {
+    const ctx = getAudioCtx();
+    if (!ctx) return;
+    const t0 = ctx.currentTime + when;
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = type;
+    o.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(gain, t0 + 0.015);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(g);
+    g.connect(ctx.destination);
+    o.start(t0);
+    o.stop(t0 + dur + 0.05);
+  }
+  // Soft, short blip when it becomes your turn.
+  function softBeep() { tone({ freq: 680, dur: 0.28, gain: 0.12 }); }
+  // Bell-ish chime (stacked partials with long decay) when anyone declares.
+  function bellSound() {
+    tone({ freq: 880, dur: 1.1, gain: 0.22 });
+    tone({ freq: 1320, dur: 1.0, gain: 0.10 });
+    tone({ freq: 1760, dur: 0.8, gain: 0.05 });
+  }
+  function handleSounds(prev, s) {
+    if (!s) return;
+    const myTurnNow = !!(s.you && s.you.isYourTurn) && s.state === 'awaitingMove';
+    const myTurnBefore = !!(prev && prev.you && prev.you.isYourTurn && prev.state === 'awaitingMove');
+    if (myTurnNow && !myTurnBefore) softBeep();
+    const declaredNow = s.state === 'roundEnd';
+    const declaredBefore = !!(prev && prev.state === 'roundEnd');
+    if (declaredNow && !declaredBefore) bellSound();
+  }
+
   function renderCard(card, opts = {}) {
     const el = document.createElement('div');
     el.className = 'card' + (SUIT_IS_RED[card.suit] ? ' red' : '');
@@ -722,6 +817,14 @@
     return el;
   }
 
+  // Compact "7♥" text label for a card, used in the previous-turn table.
+  function cardSpan(card) {
+    const span = document.createElement('span');
+    span.className = 'mini-card' + (SUIT_IS_RED[card.suit] ? ' red' : '');
+    span.textContent = card.rank + SUIT_GLYPH[card.suit];
+    return span;
+  }
+
   // ---------- Lobby UI ----------
   $('btnCreate').addEventListener('click', () => {
     const name = $('inputName').value.trim();
@@ -732,7 +835,7 @@
 
   $('btnJoin').addEventListener('click', () => {
     const name = $('inputName').value.trim();
-    const gameId = $('inputGameId').value.trim().toUpperCase();
+    const gameId = $('inputGameId').value.trim();
     if (!name) { $('lobbyErr').textContent = 'Enter your name first.'; return; }
     if (!gameId) { $('lobbyErr').textContent = 'Enter a Game ID.'; return; }
     $('lobbyErr').textContent = '';
@@ -740,7 +843,7 @@
   });
 
   $('inputGameId').addEventListener('input', (e) => {
-    e.target.value = e.target.value.toUpperCase();
+    e.target.value = e.target.value.replace(/\D/g, '').slice(0, 3);
   });
 
   $('btnStart').addEventListener('click', () => socket.emit('startGame'));
@@ -783,6 +886,14 @@
   });
   $('closeScore').addEventListener('click', () => hideModal('scoreModal'));
 
+  // Escape closes the rules / scoreboard modals.
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      hideModal('rulesModal');
+      hideModal('scoreModal');
+    }
+  });
+
   $('copyId').addEventListener('click', () => {
     if (!myGameId) return;
     navigator.clipboard.writeText(myGameId).then(() => {
@@ -824,7 +935,9 @@
   });
 
   socket.on('state', (s) => {
+    const prev = state;
     state = s;
+    handleSounds(prev, s);
     render();
     updateTimerDisplay();
     startTimerLoop();
@@ -908,9 +1021,61 @@
     }
 
     renderOpponents();
+    renderTurnTable();
     renderCenter();
     renderHand();
     renderOverlay();
+  }
+
+  // Top-left panel: each player's most recent discard + pick-up this round.
+  function renderTurnTable() {
+    const el = $('turnTable');
+    const players = state.players || [];
+    const anyAction = players.some(p => p.lastAction);
+    if (!anyAction) { el.classList.add('hidden'); return; }
+    el.classList.remove('hidden');
+    el.innerHTML = '';
+
+    const title = document.createElement('h4');
+    title.textContent = 'Last turn';
+    el.appendChild(title);
+
+    const table = document.createElement('table');
+    const thead = document.createElement('thead');
+    thead.innerHTML = '<tr><th>Player</th><th>Discarded</th><th>Picked up</th></tr>';
+    table.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
+    players.forEach(p => {
+      const tr = document.createElement('tr');
+      const nameTd = document.createElement('td');
+      nameTd.className = 'pname';
+      nameTd.textContent = p.name;
+      const discTd = document.createElement('td');
+      const pickTd = document.createElement('td');
+      const a = p.lastAction;
+      if (a) {
+        (a.discarded || []).forEach((c, i) => {
+          if (i) discTd.appendChild(document.createTextNode(' '));
+          discTd.appendChild(cardSpan(c));
+        });
+        if (a.picked === 'deck') {
+          const d = document.createElement('span');
+          d.className = 'deck-tag';
+          d.textContent = 'Deck';
+          pickTd.appendChild(d);
+        } else if (a.picked) {
+          pickTd.appendChild(cardSpan(a.picked));
+        }
+      } else {
+        discTd.innerHTML = '<span class="none">—</span>';
+        pickTd.innerHTML = '<span class="none">—</span>';
+      }
+      tr.append(nameTd, discTd, pickTd);
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    el.appendChild(table);
   }
 
   function opponentSeats(n) {
@@ -963,7 +1128,7 @@
 
       const name = document.createElement('div');
       name.className = 'name';
-      name.textContent = p.name + (p.isHost ? ' ♛' : '');
+      name.textContent = p.name;
       el.appendChild(name);
 
       const meta = document.createElement('div');
@@ -1025,7 +1190,7 @@
     });
     if (top.length === 0) {
       const empty = document.createElement('div');
-      empty.style.cssText = 'width:70px;height:98px;border:2px dashed rgba(255,255,255,.2);border-radius:7px;';
+      empty.style.cssText = 'width:88px;height:123px;border:2px dashed rgba(255,255,255,.2);border-radius:8px;';
       discardArea.appendChild(empty);
     }
     $('discardLabel').textContent = top.length ? `${top.length} card${top.length>1?'s':''}` : 'empty';
@@ -1045,7 +1210,7 @@
   function renderHand() {
     const me = state.you;
     if (!me) return;
-    $('meName').textContent = me.name + (me.isHost ? ' ♛' : '');
+    $('meName').textContent = me.name;
     $('meScore').textContent = me.score + ' pts';
 
     const hand = $('myHand');
@@ -1135,7 +1300,7 @@
       const tr = document.createElement('tr');
       if (p.eliminated) tr.classList.add('eliminated');
       const nameTd = document.createElement('td');
-      nameTd.textContent = p.name + (p.isHost ? ' ♛' : '') + (p.eliminated ? ' (out)' : '');
+      nameTd.textContent = p.name + (p.eliminated ? ' (out)' : '');
       tr.appendChild(nameTd);
       state.roundHistory.forEach(r => {
         const td = document.createElement('td');

@@ -114,11 +114,10 @@ function isSequence(cards) {
 
 // ---------- Game id ----------
 function newGameId() {
-  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  // Short, easy-to-share 3-digit numeric code (000–999).
   let id;
   do {
-    id = '';
-    for (let i = 0; i < 6; i++) id += alphabet[crypto.randomInt(0, alphabet.length)];
+    id = String(crypto.randomInt(0, 1000)).padStart(3, '0');
   } while (games[id]);
   return id;
 }
@@ -135,6 +134,7 @@ function startRound(game, starterIdx) {
   game.deck = buildDeck(game.numDecks);
   for (const p of game.players) {
     p.hand = p.eliminated ? [] : game.deck.splice(0, 5);
+    p.lastAction = null;
   }
   // Place the round's initial face-up card so the first player has a
   // pick-from-discard option, just like every subsequent player.
@@ -204,6 +204,7 @@ function autoPlayCurrentTurn(game) {
   if (game.deck.length > 0) player.hand.push(game.deck.shift());
 
   game.discardPile.push([card]);
+  player.lastAction = { discarded: [{ rank: card.rank, suit: card.suit }], picked: 'deck' };
   game.turnsTakenThisRound += 1;
   advanceTurn(game);
   startTurnTimer(game);
@@ -240,6 +241,7 @@ function viewFor(game, playerId) {
       eliminated: p.eliminated,
       connected: p.connected,
       isHost: p.playerId === game.hostPlayerId,
+      lastAction: p.lastAction || null,
     })),
     you: me ? {
       playerId: me.playerId,
@@ -285,7 +287,7 @@ io.on('connection', (socket) => {
       players: [{
         playerId, socketId: socket.id, name,
         hand: [], cumulativeScore: 0, eliminated: false,
-        connected: true, disconnectedAt: null,
+        connected: true, disconnectedAt: null, lastAction: null,
       }],
       deck: [], discardPile: [],
       currentTurnIdx: 0, round: 0, roundStarterIdx: 0,
@@ -332,7 +334,7 @@ io.on('connection', (socket) => {
     game.players.push({
       playerId, socketId: socket.id, name,
       hand: [], cumulativeScore: 0, eliminated: false,
-      connected: true, disconnectedAt: null,
+      connected: true, disconnectedAt: null, lastAction: null,
     });
     socket.data.gameId = gameId;
     socket.data.playerId = playerId;
@@ -407,17 +409,25 @@ io.on('connection', (socket) => {
     for (const i of unique) player.hand.splice(i, 1);
 
     // Perform pick
+    let pickedRecord;
     if (pickSource === 'deck') {
       refillDeckIfNeeded(game);
       if (game.deck.length > 0) player.hand.push(game.deck.shift());
+      pickedRecord = 'deck';
     } else {
       const top = game.discardPile[game.discardPile.length - 1];
-      player.hand.push(top.splice(pickIdx, 1)[0]);
+      const picked = top.splice(pickIdx, 1)[0];
+      player.hand.push(picked);
+      pickedRecord = { rank: picked.rank, suit: picked.suit };
       if (top.length === 0) game.discardPile.pop();
     }
 
     // Commit the discarded group as the new top
     game.discardPile.push(selected);
+    player.lastAction = {
+      discarded: selected.map(c => ({ rank: c.rank, suit: c.suit })),
+      picked: pickedRecord,
+    };
     game.turnsTakenThisRound += 1;
     advanceTurn(game);
     startTurnTimer(game);
@@ -486,10 +496,12 @@ function resolveDeclare(game, declarer) {
   const minTotal = Math.min(...totals.map(t => t.total));
   const strictlyLowest = declarerTotal === minTotal && totals.filter(t => t.total === minTotal).length === 1;
 
-  // Scoring: each non-declarer gets max(0, theirHandTotal - declarerHandTotal).
-  // On a correct declare this is always > 0. On a wrong declare any player
-  // who actually beat the declarer scores 0 (the declarer alone takes the
-  // +30 penalty — no double whammy on the players who held lower hands).
+  // Scoring:
+  //   Correct declare → each non-declarer adds their FULL hand total; the
+  //     declarer (strictly lowest) scores 0.
+  //   Wrong declare → the declarer takes the +30 penalty and each other
+  //     player adds max(0, theirHandTotal - declarerHandTotal), so a player
+  //     who actually beat the declarer scores 0 (no double whammy).
   const perPlayer = {};
   for (const t of totals) perPlayer[t.p.playerId] = 0;
   for (const p of game.players) if (p.eliminated) perPlayer[p.playerId] = 0;
@@ -497,7 +509,7 @@ function resolveDeclare(game, declarer) {
   if (strictlyLowest) {
     for (const t of totals) {
       if (t.p.playerId !== declarer.playerId) {
-        const delta = Math.max(0, t.total - declarerTotal);
+        const delta = t.total;
         t.p.cumulativeScore += delta;
         perPlayer[t.p.playerId] = delta;
       }
