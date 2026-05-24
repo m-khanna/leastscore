@@ -499,7 +499,7 @@ function resolveDeclare(game, declarer) {
   // Scoring:
   //   Correct declare → each non-declarer adds their FULL hand total; the
   //     declarer (strictly lowest) scores 0.
-  //   Wrong declare → the declarer takes the +30 penalty and each other
+  //   Wrong declare → the declarer takes the +20 penalty and each other
   //     player adds max(0, theirHandTotal - declarerHandTotal), so a player
   //     who actually beat the declarer scores 0 (no double whammy).
   const perPlayer = {};
@@ -515,8 +515,8 @@ function resolveDeclare(game, declarer) {
       }
     }
   } else {
-    declarer.cumulativeScore += 30;
-    perPlayer[declarer.playerId] = 30;
+    declarer.cumulativeScore += 20;
+    perPlayer[declarer.playerId] = 20;
     for (const t of totals) {
       if (t.p.playerId !== declarer.playerId) {
         const delta = Math.max(0, t.total - declarerTotal);

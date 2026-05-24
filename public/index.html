@@ -408,6 +408,17 @@
     max-height: 90vh;
     overflow-y: auto;
     box-shadow: 0 20px 50px rgba(0,0,0,.6);
+    position: relative;
+    z-index: 1;
+  }
+  /* Fireworks canvas sits behind the win panel, over the dark backdrop. */
+  .fireworks {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    pointer-events: none;
   }
   .overlay h2 { margin: 0 0 8px; color: var(--gold-bright); }
   .overlay .declare-result {
@@ -658,6 +669,7 @@
 
 <!-- ---------- Round end / game end overlay ---------- -->
 <div id="overlay" class="overlay hidden">
+  <canvas id="fireworks" class="fireworks hidden"></canvas>
   <div class="panel" id="overlayPanel"></div>
 </div>
 
@@ -667,7 +679,7 @@
     <button class="modal-close" id="closeRules">×</button>
     <h2 style="margin-top: 0;">Rules</h2>
     <div class="rules-content">
-      <p><b>Goal:</b> have the strictly lowest hand total when you declare. Score 0 if right, +30 if wrong. Players are eliminated at the score limit. Last one standing wins.</p>
+      <p><b>Goal:</b> have the strictly lowest hand total when you declare. Score 0 if right, +20 if wrong. Players are eliminated at the score limit. Last one standing wins.</p>
 
       <div class="rules-cols">
         <div>
@@ -699,7 +711,7 @@
           <h3>Declaring</h3>
           <ul>
             <li>Strictly lowest → you score <code>0</code>; each other player adds <b>their full hand total</b>.</li>
-            <li>Not lowest → you take <b>+30</b>; each other player gets <b>max(0, their hand − your hand)</b>.</li>
+            <li>Not lowest → you take <b>+20</b>; each other player gets <b>max(0, their hand − your hand)</b>.</li>
           </ul>
 
           <h3>Other</h3>
@@ -796,6 +808,161 @@
     const declaredNow = s.state === 'roundEnd';
     const declaredBefore = !!(prev && prev.state === 'roundEnd');
     if (declaredNow && !declaredBefore) bellSound();
+    // Game over → fireworks + victory theme (once, on the transition).
+    const overNow = s.state === 'gameEnd';
+    const overBefore = !!(prev && prev.state === 'gameEnd');
+    if (overNow && !overBefore) { startFireworks(); playChariots(); }
+    if (!overNow && overBefore) { stopFireworks(); stopFanfare(); }
+  }
+
+  // ---------- Victory theme (synthesized rendition of the Chariots of Fire main theme) ----------
+  // Browsers can't play the copyrighted recording, so this re-creates the
+  // theme's melody with oscillators (warm synth lead + octave + bass drone).
+  let fanfareNodes = [];
+  function noteFreq(n) {
+    const map = { C: 0, 'C#': 1, Db: 1, D: 2, 'D#': 3, Eb: 3, E: 4, F: 5, 'F#': 6, Gb: 6, G: 7, 'G#': 8, Ab: 8, A: 9, 'A#': 10, Bb: 10, B: 11 };
+    const m = /^([A-G][b#]?)(\d)$/.exec(n);
+    if (!m) return null;
+    const semis = map[m[1]] + (parseInt(m[2], 10) - 4) * 12; // relative to C4
+    return 440 * Math.pow(2, (semis - 9) / 12);               // A4 (semis 9) = 440Hz
+  }
+  function playFanfareNote(ctx, freq, t0, dur, gainVal) {
+    if (freq == null) return;
+    [[freq, 'triangle', gainVal], [freq / 2, 'sine', gainVal * 0.5]].forEach(([f, type, peak]) => {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = type;
+      o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(peak, t0 + 0.09);
+      g.gain.setValueAtTime(peak, t0 + dur * 0.7);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      o.connect(g);
+      g.connect(ctx.destination);
+      o.start(t0);
+      o.stop(t0 + dur + 0.06);
+      fanfareNodes.push(o);
+    });
+  }
+  function playChariots() {
+    const ctx = getAudioCtx();
+    if (!ctx) return;
+    stopFanfare();
+    const beat = 0.58; // stately tempo
+    // Main theme melody (key of F), [note, beats]; 'rest' = silence.
+    const melody = [
+      ['F4', 1], ['F4', 1], ['G4', 1], ['A4', 1],
+      ['A4', 2], ['G4', 1], ['A4', 1],
+      ['C5', 2], ['A4', 1], ['G4', 1],
+      ['F4', 3], ['rest', 1],
+      ['A4', 1], ['A4', 1], ['C5', 1], ['D5', 1],
+      ['C5', 2], ['A4', 1], ['G4', 1],
+      ['F4', 4],
+    ];
+    const startT = ctx.currentTime + 0.15;
+    let t = startT;
+    melody.forEach(([n, b]) => {
+      const dur = b * beat;
+      if (n !== 'rest') playFanfareNote(ctx, noteFreq(n), t, dur, 0.18);
+      t += dur;
+    });
+    const total = t - startT;
+    // Sustained low drone for that Vangelis pad feel.
+    const drone = ctx.createOscillator();
+    const dg = ctx.createGain();
+    drone.type = 'sine';
+    drone.frequency.value = noteFreq('F2');
+    dg.gain.setValueAtTime(0.0001, startT);
+    dg.gain.exponentialRampToValueAtTime(0.06, startT + 0.6);
+    dg.gain.setValueAtTime(0.06, startT + total - 0.6);
+    dg.gain.exponentialRampToValueAtTime(0.0001, startT + total);
+    drone.connect(dg);
+    dg.connect(ctx.destination);
+    drone.start(startT);
+    drone.stop(startT + total + 0.1);
+    fanfareNodes.push(drone);
+  }
+  function stopFanfare() {
+    fanfareNodes.forEach(o => { try { o.stop(); } catch (e) {} });
+    fanfareNodes = [];
+  }
+
+  // ---------- Fireworks (canvas particle bursts) ----------
+  let fwRaf = null, fwCtx = null, fwParticles = [], fwActive = false, fwLastLaunch = 0;
+  function resizeFwCanvas() {
+    const c = $('fireworks');
+    if (!c) return;
+    c.width = window.innerWidth;
+    c.height = window.innerHeight;
+  }
+  function fwExplode(x, y) {
+    const hue = Math.floor(Math.random() * 360);
+    const count = 60 + Math.floor(Math.random() * 40);
+    for (let i = 0; i < count; i++) {
+      const ang = (Math.PI * 2) * (i / count);
+      const speed = 2 + Math.random() * 4.5;
+      fwParticles.push({
+        x, y,
+        vx: Math.cos(ang) * speed,
+        vy: Math.sin(ang) * speed,
+        life: 1,
+        decay: 0.008 + Math.random() * 0.012,
+        color: `hsl(${(hue + Math.random() * 40) | 0}, 100%, ${(58 + Math.random() * 14) | 0}%)`,
+      });
+    }
+  }
+  function fwLoop(ts) {
+    if (!fwActive) return;
+    fwRaf = requestAnimationFrame(fwLoop);
+    const c = $('fireworks');
+    const ctx = fwCtx;
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = 'rgba(8,12,20,0.20)'; // dark trailing sky
+    ctx.fillRect(0, 0, c.width, c.height);
+    ctx.globalCompositeOperation = 'lighter';
+    if (ts - fwLastLaunch > 600) {
+      fwLastLaunch = ts;
+      fwExplode(c.width * (0.12 + Math.random() * 0.76), c.height * (0.12 + Math.random() * 0.4));
+    }
+    for (let i = fwParticles.length - 1; i >= 0; i--) {
+      const p = fwParticles[i];
+      p.vx *= 0.99;
+      p.vy = p.vy * 0.99 + 0.035; // gravity
+      p.x += p.vx;
+      p.y += p.vy;
+      p.life -= p.decay;
+      if (p.life <= 0) { fwParticles.splice(i, 1); continue; }
+      ctx.globalAlpha = Math.max(0, p.life);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 2.4, 0, Math.PI * 2);
+      ctx.fillStyle = p.color;
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+  function startFireworks() {
+    if (fwActive) return;
+    const c = $('fireworks');
+    if (!c) return;
+    c.classList.remove('hidden');
+    resizeFwCanvas();
+    window.addEventListener('resize', resizeFwCanvas);
+    fwCtx = c.getContext('2d');
+    fwParticles = [];
+    fwLastLaunch = 0;
+    fwActive = true;
+    fwRaf = requestAnimationFrame(fwLoop);
+  }
+  function stopFireworks() {
+    fwActive = false;
+    if (fwRaf) cancelAnimationFrame(fwRaf);
+    fwRaf = null;
+    window.removeEventListener('resize', resizeFwCanvas);
+    const c = $('fireworks');
+    if (c) {
+      if (fwCtx) fwCtx.clearRect(0, 0, c.width, c.height);
+      c.classList.add('hidden');
+    }
   }
 
   function renderCard(card, opts = {}) {
@@ -1358,7 +1525,7 @@
     verdict.className = 'declare-result ' + (res.correct ? 'ok' : 'bad');
     verdict.textContent = res.correct
       ? `${declarer.name} declared with ${res.declarerTotal} and was correct — scores 0 this round.`
-      : `${declarer.name} declared with ${res.declarerTotal} but didn't have the lowest — +30 penalty.`;
+      : `${declarer.name} declared with ${res.declarerTotal} but didn't have the lowest — +20 penalty.`;
     panel.appendChild(verdict);
 
     res.hands.forEach(h => {
