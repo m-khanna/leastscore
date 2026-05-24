@@ -259,6 +259,20 @@
   .opponent.active-turn .stack .back:last-child {
     box-shadow: 0 0 0 2px var(--gold), 0 1px 6px rgba(212,160,23,.6);
   }
+  /* Spectator (eliminated viewer) sees opponents' real cards. */
+  .opponent .spec-hand {
+    display: flex;
+    justify-content: center;
+    gap: 2px;
+    min-height: 70px;
+    align-items: center;
+  }
+  .opponent .spec-hand .card { width: 40px; height: 56px; box-shadow: 0 1px 3px rgba(0,0,0,.45); }
+  .opponent .spec-hand .card .corner.tl { top: 2px; left: 3px; }
+  .opponent .spec-hand .card .corner.br { bottom: 2px; right: 3px; }
+  .opponent .spec-hand .card .corner .rank { font-size: 11px; }
+  .opponent .spec-hand .card .corner .suit { font-size: 9px; }
+  .opponent .spec-hand .card .center-suit { font-size: 16px; }
 
   /* Center: deck + discard */
   .center-area {
@@ -420,6 +434,18 @@
     z-index: 0;
     pointer-events: none;
   }
+  /* Victory track player — small, bottom-right, only during game over. */
+  .yt-wrap {
+    position: fixed;
+    bottom: 16px; right: 16px;
+    width: 260px; height: 147px;
+    z-index: 70;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 2px solid var(--gold);
+    box-shadow: 0 8px 22px rgba(0,0,0,.6);
+  }
+  .yt-wrap iframe { width: 100%; height: 100%; display: block; }
   .overlay h2 { margin: 0 0 8px; color: var(--gold-bright); }
   .overlay .declare-result {
     margin: 10px 0 18px;
@@ -508,43 +534,48 @@
   }
   @keyframes fadeIn { from { opacity: 0; transform: translate(-50%, -10px); } to { opacity: 1; } }
 
-  /* ---------- Previous-turn table (top-left of felt) ---------- */
+  /* ---------- Previous-turn table (left side of felt) ---------- */
   .turn-table {
     position: absolute;
-    top: 12px; left: 12px;
-    background: rgba(0,0,0,.45);
-    border: 1px solid rgba(255,255,255,.1);
-    border-radius: 8px;
-    padding: 8px 10px 4px;
+    top: 50%; left: 16px;
+    transform: translateY(-50%);
+    width: 320px;
+    max-height: calc(100% - 32px);
+    overflow-y: auto;
+    background: rgba(0,0,0,.5);
+    border: 1px solid rgba(255,255,255,.14);
+    border-radius: 10px;
+    padding: 14px 16px 10px;
     z-index: 5;
-    box-shadow: 0 4px 12px rgba(0,0,0,.4);
+    box-shadow: 0 6px 18px rgba(0,0,0,.5);
   }
   .turn-table h4 {
-    margin: 0 0 6px;
-    font-size: 10px;
-    letter-spacing: 1.5px;
-    color: #bbb;
+    margin: 0 0 10px;
+    font-size: 13px;
+    letter-spacing: 2px;
+    color: var(--gold-bright);
     text-transform: uppercase;
-    font-weight: 600;
+    font-weight: 700;
   }
-  .turn-table table { border-collapse: collapse; }
+  .turn-table table { border-collapse: collapse; width: 100%; }
   .turn-table th, .turn-table td {
-    padding: 3px 8px;
+    padding: 8px 8px;
     text-align: left;
-    border-bottom: 1px solid rgba(255,255,255,.06);
-    font-size: 12px;
+    border-bottom: 1px solid rgba(255,255,255,.09);
+    font-size: 16px;
     white-space: nowrap;
   }
   .turn-table tr:last-child td { border-bottom: none; }
   .turn-table th {
-    color: #999;
-    font-size: 9px;
+    color: #aaa;
+    font-size: 11px;
     text-transform: uppercase;
-    letter-spacing: .5px;
+    letter-spacing: 1px;
     font-weight: 600;
+    border-bottom: 2px solid rgba(255,255,255,.18);
   }
-  .turn-table td.pname { color: #eee; font-weight: 600; }
-  .turn-table .mini-card { font-weight: 700; color: #f0f0e8; }
+  .turn-table td.pname { color: #fff; font-weight: 700; font-size: 15px; }
+  .turn-table .mini-card { font-weight: 800; color: #f4f4ec; margin-right: 3px; }
   .turn-table .mini-card.red { color: #ff8a8a; }
   .turn-table .deck-tag { color: #8cc6ff; font-style: italic; }
   .turn-table .none { color: #777; }
@@ -694,12 +725,12 @@
           <ul>
             <li><b>Single</b> card</li>
             <li><b>Pair</b> (2 of same rank)</li>
+            <li><b>Three of a kind</b> (3 of same rank)</li>
             <li><b>Four of a kind</b></li>
             <li><b>Sequence of 3</b> consecutive ranks (any suits). Ace low (A-2-3) or high (Q-K-A); no wrap.</li>
             <li><b>Sequence of 5</b> consecutive ranks (any suits)</li>
             <li><b>Flush of 5</b> (same suit)</li>
           </ul>
-          <p><b>3 of a kind is NOT valid.</b></p>
         </div>
         <div>
           <h3>On your turn</h3>
@@ -736,6 +767,9 @@
   </div>
 </div>
 
+<!-- ---------- Victory track player (shown only on game over) ---------- -->
+<div id="ytWrap" class="yt-wrap hidden"><div id="ytPlayer"></div></div>
+
 <div id="toastContainer"></div>
 
 <script src="/socket.io/socket.io.js"></script>
@@ -743,6 +777,7 @@
 (function () {
   const SUIT_GLYPH = { S: '♠', H: '♥', D: '♦', C: '♣' };
   const SUIT_IS_RED = { H: true, D: true, S: false, C: false };
+  const cardValue = (c) => c.rank === 'A' ? 1 : (['J', 'Q', 'K'].includes(c.rank) ? 10 : parseInt(c.rank, 10));
 
   const socket = io({ transports: ['websocket', 'polling'] });
   let myPlayerId = null;
@@ -794,30 +829,80 @@
   }
   // Soft, short blip when it becomes your turn.
   function softBeep() { tone({ freq: 680, dur: 0.28, gain: 0.12 }); }
-  // Bell-ish chime (stacked partials with long decay) when anyone declares.
-  function bellSound() {
-    tone({ freq: 880, dur: 1.1, gain: 0.22 });
-    tone({ freq: 1320, dur: 1.0, gain: 0.10 });
-    tone({ freq: 1760, dur: 0.8, gain: 0.05 });
+
+  // Happy ascending major arpeggio (good news for you).
+  function happyChime() {
+    const ctx = getAudioCtx();
+    if (!ctx) return;
+    const seq = [523.25, 659.25, 783.99, 1046.5]; // C5 E5 G5 C6
+    let t = ctx.currentTime + 0.02;
+    seq.forEach(f => {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = 'triangle';
+      o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.2, t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.24);
+      o.connect(g);
+      g.connect(ctx.destination);
+      o.start(t);
+      o.stop(t + 0.28);
+      t += 0.12;
+    });
   }
+  // Sad two-note descending "boo boo" (bad news for you).
+  function sadBoo() {
+    const ctx = getAudioCtx();
+    if (!ctx) return;
+    const boop = (f1, f2, t0, dur) => {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(f1, t0);
+      o.frequency.linearRampToValueAtTime(f2, t0 + dur);
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(0.16, t0 + 0.04);
+      g.gain.setValueAtTime(0.16, t0 + dur * 0.6);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      o.connect(g);
+      g.connect(ctx.destination);
+      o.start(t0);
+      o.stop(t0 + dur + 0.05);
+    };
+    const t = ctx.currentTime + 0.02;
+    boop(233.08, 185.00, t, 0.30);        // first "boo" — droops down
+    boop(196.00, 146.83, t + 0.34, 0.5);  // second "boo" — lower, longer
+  }
+
   function handleSounds(prev, s) {
     if (!s) return;
     const myTurnNow = !!(s.you && s.you.isYourTurn) && s.state === 'awaitingMove';
     const myTurnBefore = !!(prev && prev.you && prev.you.isYourTurn && prev.state === 'awaitingMove');
     if (myTurnNow && !myTurnBefore) softBeep();
-    const declaredNow = s.state === 'roundEnd';
-    const declaredBefore = !!(prev && prev.state === 'roundEnd');
-    if (declaredNow && !declaredBefore) bellSound();
+
+    // A declare resolved into a round end → per-outcome reaction sound.
+    //   Correct declare → declarer is happy, everyone else is sad.
+    //   Wrong   declare → declarer is sad, everyone else is happy.
+    const roundEndedNow = s.state === 'roundEnd' && (!prev || prev.state !== 'roundEnd');
+    if (roundEndedNow && s.lastRoundResult) {
+      const res = s.lastRoundResult;
+      const iDeclared = res.declarerId === myPlayerId;
+      const happyForMe = res.correct ? iDeclared : !iDeclared;
+      if (happyForMe) happyChime(); else sadBoo();
+    }
+
     // Game over → fireworks + victory theme (once, on the transition).
     const overNow = s.state === 'gameEnd';
     const overBefore = !!(prev && prev.state === 'gameEnd');
-    if (overNow && !overBefore) { startFireworks(); playChariots(); }
-    if (!overNow && overBefore) { stopFireworks(); stopFanfare(); }
+    if (overNow && !overBefore) { startFireworks(); playVictoryMusic(); }
+    if (!overNow && overBefore) { stopFireworks(); stopVictoryMusic(); }
   }
 
-  // ---------- Victory theme (synthesized rendition of the Chariots of Fire main theme) ----------
-  // Browsers can't play the copyrighted recording, so this re-creates the
-  // theme's melody with oscillators (warm synth lead + octave + bass drone).
+  // ---------- Victory music ----------
+  // Primary: the real Chariots of Fire recording via an embedded YouTube player
+  // (see playVictoryMusic / the YT helpers below). The synthesized rendition
+  // here (playChariots) is the offline fallback if YouTube can't autoplay.
   let fanfareNodes = [];
   function noteFreq(n) {
     const map = { C: 0, 'C#': 1, Db: 1, D: 2, 'D#': 3, Eb: 3, E: 4, F: 5, 'F#': 6, Gb: 6, G: 7, 'G#': 8, Ab: 8, A: 9, 'A#': 10, Bb: 10, B: 11 };
@@ -885,6 +970,66 @@
   function stopFanfare() {
     fanfareNodes.forEach(o => { try { o.stop(); } catch (e) {} });
     fanfareNodes = [];
+  }
+
+  // ---------- YouTube victory track (real recording) ----------
+  const VICTORY_VIDEO_ID = '1eYGl8PNjlU'; // Vangelis — Chariots of Fire (Main Theme)
+  let ytPlayer = null, ytReady = false, ytFallbackTimer = null;
+  function loadYouTube() {
+    if (window.YT && window.YT.Player) { initYouTube(); return; }
+    window.onYouTubeIframeAPIReady = initYouTube;
+    const tag = document.createElement('script');
+    tag.src = 'https://www.youtube.com/iframe_api';
+    document.head.appendChild(tag);
+  }
+  function initYouTube() {
+    if (ytPlayer) return;
+    try {
+      ytPlayer = new YT.Player('ytPlayer', {
+        width: '260', height: '147',
+        videoId: VICTORY_VIDEO_ID,
+        playerVars: { autoplay: 0, controls: 1, modestbranding: 1, rel: 0, playsinline: 1 },
+        events: {
+          onReady: () => { ytReady = true; },
+          onError: () => useSynthFallback(),
+          onStateChange: (e) => { if (e.data === 1) clearTimeout(ytFallbackTimer); }, // 1 = PLAYING
+        },
+      });
+    } catch (e) { /* fall back to synth on use */ }
+  }
+  function playVictoryMusic() {
+    if (ytReady && ytPlayer) {
+      $('ytWrap').classList.remove('hidden');
+      try {
+        ytPlayer.seekTo(0);
+        ytPlayer.unMute();
+        ytPlayer.setVolume(75);
+        ytPlayer.playVideo();
+      } catch (e) {}
+      // If the browser blocks autoplay-with-sound, the player shows controls so
+      // it can be started manually; meanwhile fall back to the synth so the win
+      // never lands in silence.
+      clearTimeout(ytFallbackTimer);
+      ytFallbackTimer = setTimeout(() => {
+        let st = -1;
+        try { st = ytPlayer.getPlayerState(); } catch (e) {}
+        if (st !== 1) playChariots();
+      }, 1700);
+    } else {
+      playChariots();
+    }
+  }
+  function useSynthFallback() {
+    const w = $('ytWrap');
+    if (w) w.classList.add('hidden');
+    playChariots();
+  }
+  function stopVictoryMusic() {
+    clearTimeout(ytFallbackTimer);
+    try { if (ytPlayer && ytPlayer.stopVideo) ytPlayer.stopVideo(); } catch (e) {}
+    const w = $('ytWrap');
+    if (w) w.classList.add('hidden');
+    stopFanfare();
   }
 
   // ---------- Fireworks (canvas particle bursts) ----------
@@ -1052,6 +1197,13 @@
     showModal('scoreModal');
   });
   $('closeScore').addEventListener('click', () => hideModal('scoreModal'));
+
+  // Click on the dark backdrop (outside the panel) closes the modal.
+  ['rulesModal', 'scoreModal'].forEach(id => {
+    $(id).addEventListener('click', (e) => {
+      if (e.target === $(id)) hideModal(id);
+    });
+  });
 
   // Escape closes the rules / scoreboard modals.
   document.addEventListener('keydown', (e) => {
@@ -1276,22 +1428,36 @@
       el.style.left = seat.leftPct + '%';
       el.style.top = seat.topPx + 'px';
 
-      const stack = document.createElement('div');
-      stack.className = 'stack';
-      const showCount = Math.min(p.cardCount, 5);
-      for (let k = 0; k < showCount; k++) {
-        const b = document.createElement('div');
-        b.className = 'back';
-        b.style.left = (k * 9) + 'px';
-        b.style.top = (k * 1.5) + 'px';
-        stack.appendChild(b);
+      if (Array.isArray(p.hand)) {
+        // Spectator view (you've been eliminated): show real cards face up.
+        const sh = document.createElement('div');
+        sh.className = 'spec-hand';
+        if (p.hand.length === 0) {
+          const empty = document.createElement('div');
+          empty.style.cssText = 'width:38px;height:53px;border:1.5px dashed rgba(255,255,255,.2);border-radius:5px;';
+          sh.appendChild(empty);
+        } else {
+          p.hand.forEach(c => sh.appendChild(renderCard(c)));
+        }
+        el.appendChild(sh);
+      } else {
+        const stack = document.createElement('div');
+        stack.className = 'stack';
+        const showCount = Math.min(p.cardCount, 5);
+        for (let k = 0; k < showCount; k++) {
+          const b = document.createElement('div');
+          b.className = 'back';
+          b.style.left = (k * 9) + 'px';
+          b.style.top = (k * 1.5) + 'px';
+          stack.appendChild(b);
+        }
+        if (p.cardCount === 0) {
+          const empty = document.createElement('div');
+          empty.style.cssText = 'width:46px;height:64px;border:1.5px dashed rgba(255,255,255,.2);border-radius:5px;';
+          stack.appendChild(empty);
+        }
+        el.appendChild(stack);
       }
-      if (p.cardCount === 0) {
-        const empty = document.createElement('div');
-        empty.style.cssText = 'width:46px;height:64px;border:1.5px dashed rgba(255,255,255,.2);border-radius:5px;';
-        stack.appendChild(empty);
-      }
-      el.appendChild(stack);
 
       const name = document.createElement('div');
       name.className = 'name';
@@ -1300,7 +1466,11 @@
 
       const meta = document.createElement('div');
       meta.className = 'meta';
+      const specTotal = Array.isArray(p.hand) && !p.eliminated
+        ? ` · =${p.hand.reduce((s, c) => s + cardValue(c), 0)}`
+        : '';
       meta.innerHTML = `<span class="score">${p.score}</span> pts · ${p.cardCount} cards`
+        + specTotal
         + (p.eliminated ? ' · OUT' : '')
         + (!p.connected ? ' · offline' : '');
       el.appendChild(meta);
@@ -1576,6 +1746,9 @@
   function escapeHtml(s) {
     return s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
+
+  // Preload the YouTube player so the victory track is ready by game over.
+  loadYouTube();
 
 })();
 </script>

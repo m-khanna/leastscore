@@ -16,7 +16,11 @@ const io = new Server(server, { cors: { origin: '*' } });
 app.use(express.static(path.join(__dirname, 'public')));
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Least Score listening on :${PORT}`));
+// Only bind the port when run directly (`node server.js`), so the module can be
+// required by tests without starting a listener.
+if (require.main === module) {
+  server.listen(PORT, () => console.log(`Least Score listening on :${PORT}`));
+}
 
 // ---------- Game state shape ----------
 // games[gameId] = {
@@ -72,17 +76,17 @@ const RANK_PRIMARY = { A: 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8'
 // Valid:
 //   - single card
 //   - pair (2 of same rank)
+//   - three-of-a-kind
 //   - four-of-a-kind
 //   - sequence of exactly 3 or 5 consecutive ranks (any suits, ace low OR high, no wrap)
 //   - 5-card flush (same suit)
-// Three-of-a-kind is NOT valid.
 function validateDiscard(cards) {
   const n = cards.length;
   if (n < 1) return false;
   if (n === 1) return true;
   if (n === 2) return cards[0].rank === cards[1].rank;
   if (n === 4) return cards.every(c => c.rank === cards[0].rank);
-  if (n === 3) return isSequence(cards);
+  if (n === 3) return isSequence(cards) || cards.every(c => c.rank === cards[0].rank);
   if (n === 5) return isSequence(cards) || isFlush(cards);
   return false;
 }
@@ -215,6 +219,8 @@ function autoPlayCurrentTurn(game) {
 function viewFor(game, playerId) {
   const me = game.players.find(p => p.playerId === playerId);
   const myHand = me ? me.hand : [];
+  // Eliminated players are spectators and may see everyone's cards.
+  const iAmSpectator = !!(me && me.eliminated);
   const activeCount = game.players.filter(p => !p.eliminated).length;
   // Declare is blocked at the start of every round until each active player
   // has completed their first turn of that round.
@@ -242,6 +248,7 @@ function viewFor(game, playerId) {
       connected: p.connected,
       isHost: p.playerId === game.hostPlayerId,
       lastAction: p.lastAction || null,
+      hand: iAmSpectator ? p.hand.map(c => ({ rank: c.rank, suit: c.suit })) : undefined,
     })),
     you: me ? {
       playerId: me.playerId,
@@ -566,3 +573,6 @@ function sanitizeName(n) {
   if (typeof n !== 'string') return '';
   return n.trim().slice(0, 20);
 }
+
+// Exported for unit tests (no effect on the running server).
+module.exports = { validateDiscard, isSequence, isFlush, viewFor, handTotal };
