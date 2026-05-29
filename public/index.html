@@ -537,10 +537,12 @@
   /* ---------- Previous-turn table (left side of felt) ---------- */
   .turn-table {
     position: absolute;
-    top: 50%; left: 16px;
-    transform: translateY(-50%);
+    /* Anchored to the lower-left rather than vertically centered, and capped so
+       the box can never rise into the opponent arc at the top of the felt — it
+       used to grow tall (with 4-6 players) and cover the left seats' names. */
+    bottom: 12px; left: 16px;
     width: 320px;
-    max-height: calc(100% - 32px);
+    max-height: calc(100% - 260px);
     overflow-y: auto;
     background: rgba(0,0,0,.5);
     border: 1px solid rgba(255,255,255,.14);
@@ -1235,8 +1237,35 @@
     socket.emit('declare');
   });
 
+  // ---------- Reconnect retry ----------
+  // On reconnect we re-emit joinGame. As a backstop against a lost emit, keep
+  // retrying until the server confirms our seat (a 'joined' or 'state' arrives)
+  // or we hit the attempt cap. Bounded so a permanent error (game gone) can't
+  // loop forever.
+  let rejoinTimer = null;
+  let rejoinAttempts = 0;
+  const REJOIN_MAX_ATTEMPTS = 5;
+  const REJOIN_RETRY_MS = 2000;
+  function attemptRejoin() {
+    const gameId = sessionStorage.getItem('ls_gameId');
+    const name = sessionStorage.getItem('ls_name');
+    if (!gameId || !name) return;
+    socket.emit('joinGame', { gameId, name });
+    rejoinAttempts += 1;
+    clearTimeout(rejoinTimer);
+    if (rejoinAttempts < REJOIN_MAX_ATTEMPTS) {
+      rejoinTimer = setTimeout(attemptRejoin, REJOIN_RETRY_MS);
+    }
+  }
+  function stopRejoin() {
+    clearTimeout(rejoinTimer);
+    rejoinTimer = null;
+    rejoinAttempts = 0;
+  }
+
   // ---------- Socket events ----------
   socket.on('joined', ({ gameId, playerId }) => {
+    stopRejoin();
     myGameId = gameId;
     myPlayerId = playerId;
     // remember for reconnect
@@ -1248,12 +1277,17 @@
   });
 
   socket.on('errorMsg', ({ message }) => {
+    // A rejoin that errors (game gone, full, started) won't fix itself by
+    // retrying, so stop the retry loop to avoid spamming the same error.
+    stopRejoin();
     $('lobbyErr').textContent = message;
     $('lobbyErr2').textContent = message;
     showToast(message);
   });
 
   socket.on('state', (s) => {
+    // Receiving state means our seat is attached — reconnect succeeded.
+    stopRejoin();
     const prev = state;
     state = s;
     handleSounds(prev, s);
@@ -1263,11 +1297,13 @@
   });
 
   socket.on('connect', () => {
-    // Reconnect attempt: rejoin previous game with same name
+    // Reconnect attempt: rejoin previous game with same name, retrying until
+    // the server confirms our seat.
     const gameId = sessionStorage.getItem('ls_gameId');
     const name = sessionStorage.getItem('ls_name');
     if (gameId && name) {
-      socket.emit('joinGame', { gameId, name });
+      rejoinAttempts = 0;
+      attemptRejoin();
     }
   });
 

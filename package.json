@@ -4,7 +4,8 @@
   "description": "Online multiplayer implementation of the card game Least Score",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test"
   },
   "engines": {
     "node": ">=18"

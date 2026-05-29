@@ -11,7 +11,12 @@ const { Server } = require('socket.io');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: '*' } });
+// pingInterval/pingTimeout are lowered from the socket.io defaults (25s/20s)
+// so the server detects an unclean disconnect (wifi blip, phone lock, tab
+// backgrounded) within ~20s instead of ~45s. This shrinks the window in which
+// a reconnecting player's seat still looks "connected" to a ghost socket.
+const SERVER_OPTIONS = { cors: { origin: '*' }, pingInterval: 10000, pingTimeout: 10000 };
+const io = new Server(server, SERVER_OPTIONS);
 
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -128,6 +133,41 @@ function newGameId() {
 
 function newPlayerId() {
   return crypto.randomBytes(8).toString('hex');
+}
+
+// Decide what a joinGame request should do, mutating the matched seat in place.
+// Returns one of:
+//   { type: 'reclaim', player, displacedSocketId }  — same name re-attaches;
+//       displacedSocketId is the old socket to disconnect (null if none/self).
+//   { type: 'new', player }                          — brand-new seat (already pushed).
+//   { type: 'error', message }                       — cannot join.
+// A re-join by name ALWAYS reclaims the seat rather than rejecting on
+// "already connected": during a reconnect the old socket is usually a ghost
+// that the server hasn't timed out yet, and reconnecting yourself is the
+// common case. A genuine name collision (rare) simply boots the older session.
+function resolveJoin(game, { name, socketId }) {
+  const existing = game.players.find(p => p.name.toLowerCase() === name.toLowerCase());
+  if (existing) {
+    const displacedSocketId =
+      existing.socketId && existing.socketId !== socketId ? existing.socketId : null;
+    existing.socketId = socketId;
+    existing.connected = true;
+    existing.disconnectedAt = null;
+    return { type: 'reclaim', player: existing, displacedSocketId };
+  }
+  if (game.state !== 'lobby') {
+    return { type: 'error', message: 'Game already started — only existing players can rejoin.' };
+  }
+  if (game.players.length >= 6) {
+    return { type: 'error', message: 'Game is full (max 6 players).' };
+  }
+  const player = {
+    playerId: newPlayerId(), socketId, name,
+    hand: [], cumulativeScore: 0, eliminated: false,
+    connected: true, disconnectedAt: null, lastAction: null,
+  };
+  game.players.push(player);
+  return { type: 'new', player };
 }
 
 // ---------- Round / deal ----------
@@ -317,36 +357,20 @@ io.on('connection', (socket) => {
     const game = games[gameId];
     if (!game) return sendError(socket, 'Game not found.');
 
-    // Reconnect path: same name re-attaches to the existing seat.
-    const existing = game.players.find(p => p.name.toLowerCase() === name.toLowerCase());
-    if (existing) {
-      if (existing.connected && existing.socketId && existing.socketId !== socket.id) {
-        return sendError(socket, 'A player with that name is already connected.');
-      }
-      existing.socketId = socket.id;
-      existing.connected = true;
-      existing.disconnectedAt = null;
-      socket.data.gameId = gameId;
-      socket.data.playerId = existing.playerId;
-      socket.join(gameId);
-      socket.emit('joined', { gameId, playerId: existing.playerId });
-      broadcastState(game);
-      return;
+    const result = resolveJoin(game, { name, socketId: socket.id });
+    if (result.type === 'error') return sendError(socket, result.message);
+
+    // Boot any ghost socket the reclaimed seat was still holding, so its
+    // client gets a clean disconnect and can re-prompt rather than lingering.
+    if (result.type === 'reclaim' && result.displacedSocketId) {
+      const ghost = io.sockets.sockets.get(result.displacedSocketId);
+      if (ghost) ghost.disconnect(true);
     }
 
-    if (game.state !== 'lobby') return sendError(socket, 'Game already started — only existing players can rejoin.');
-    if (game.players.length >= 6) return sendError(socket, 'Game is full (max 6 players).');
-
-    const playerId = newPlayerId();
-    game.players.push({
-      playerId, socketId: socket.id, name,
-      hand: [], cumulativeScore: 0, eliminated: false,
-      connected: true, disconnectedAt: null, lastAction: null,
-    });
     socket.data.gameId = gameId;
-    socket.data.playerId = playerId;
+    socket.data.playerId = result.player.playerId;
     socket.join(gameId);
-    socket.emit('joined', { gameId, playerId });
+    socket.emit('joined', { gameId, playerId: result.player.playerId });
     broadcastState(game);
   });
 
@@ -574,4 +598,4 @@ function sanitizeName(n) {
 }
 
 // Exported for unit tests (no effect on the running server).
-module.exports = { validateDiscard, isSequence, isFlush, viewFor, handTotal };
+module.exports = { validateDiscard, isSequence, isFlush, viewFor, handTotal, resolveJoin, SERVER_OPTIONS, server, io };
