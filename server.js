@@ -525,7 +525,10 @@ function resolveDeclare(game, declarer) {
   const totals = active.map(p => ({ p, total: handTotal(p.hand) }));
   const declarerTotal = totals.find(t => t.p.playerId === declarer.playerId).total;
   const minTotal = Math.min(...totals.map(t => t.total));
-  const strictlyLowest = declarerTotal === minTotal && totals.filter(t => t.total === minTotal).length === 1;
+  // A declare is correct if the declarer has the lowest hand — INCLUDING a tie
+  // for lowest. Being tied at the bottom still counts as a successful declare;
+  // tied players simply add 0 (their gap to the declarer is 0).
+  const lowestOrTied = declarerTotal === minTotal;
 
   // Scoring (both cases): each non-declarer adds max(0, theirHandTotal -
   //   declarerHandTotal) — the gap between their hand and the declarer's.
@@ -536,7 +539,7 @@ function resolveDeclare(game, declarer) {
   for (const t of totals) perPlayer[t.p.playerId] = 0;
   for (const p of game.players) if (p.eliminated) perPlayer[p.playerId] = 0;
 
-  if (strictlyLowest) {
+  if (lowestOrTied) {
     for (const t of totals) {
       if (t.p.playerId !== declarer.playerId) {
         const delta = Math.max(0, t.total - declarerTotal);
@@ -559,13 +562,13 @@ function resolveDeclare(game, declarer) {
   game.roundHistory.push({
     round: game.round,
     declarerId: declarer.playerId,
-    correct: strictlyLowest,
+    correct: lowestOrTied,
     perPlayer,
   });
 
   game.lastRoundResult = {
     declarerId: declarer.playerId,
-    correct: strictlyLowest,
+    correct: lowestOrTied,
     declarerTotal,
     hands: game.players.map(p => ({
       playerId: p.playerId,

@@ -1452,7 +1452,19 @@
   function renderOpponents() {
     const container = $('opponents');
     container.innerHTML = '';
-    const others = state.players.filter(p => p.playerId !== state.you?.playerId);
+    // "You" always sit at the bottom; the other seats arc across the top and
+    // are filled left → right, which is clockwise from the bottom. To make the
+    // on-screen clockwise order match the actual order of play, rotate the
+    // turn-ordered player list so it starts with whoever plays right after you.
+    const myIdx = state.players.findIndex(p => p.playerId === state.you?.playerId);
+    const others = [];
+    if (myIdx >= 0) {
+      for (let i = 1; i < state.players.length; i++) {
+        others.push(state.players[(myIdx + i) % state.players.length]);
+      }
+    } else {
+      others.push(...state.players);
+    }
     const seats = opponentSeats(others.length);
     others.forEach((p, i) => {
       const seat = seats[i] || { leftPct: 50, topPx: 30 };
@@ -1730,8 +1742,8 @@
     const verdict = document.createElement('div');
     verdict.className = 'declare-result ' + (res.correct ? 'ok' : 'bad');
     verdict.textContent = res.correct
-      ? `${declarer.name} declared with ${res.declarerTotal} and was correct — scores 0 this round.`
-      : `${declarer.name} declared with ${res.declarerTotal} but didn't have the lowest — +20 penalty.`;
+      ? `${declarer.name} declared with ${res.declarerTotal} and was correct.`
+      : `${declarer.name} declared with ${res.declarerTotal} but didn't have the lowest.`;
     panel.appendChild(verdict);
 
     res.hands.forEach(h => {
@@ -1749,7 +1761,11 @@
       totDiv.textContent = h.total !== null ? `=${h.total}` : '';
       const scoreDiv = document.createElement('div');
       scoreDiv.className = 'reveal-score';
-      scoreDiv.textContent = `${player.score} pts`;
+      // Show this round's point change (the gap added this round), not the
+      // running cumulative total.
+      const lastRound = state.roundHistory[state.roundHistory.length - 1];
+      const delta = lastRound?.perPlayer?.[h.playerId] ?? 0;
+      scoreDiv.textContent = `+${delta}`;
       row.append(nameDiv, handDiv, totDiv, scoreDiv);
       panel.appendChild(row);
     });
